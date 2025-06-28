@@ -142,16 +142,25 @@ export function Header() {
                   </div>
                 </div>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
-                  <Package className="mr-2 h-4 w-4" />
-                  <span>My Orders</span>
+                <DropdownMenuItem asChild>
+                  <Link href="/my-orders" className="flex items-center">
+                    <Package className="mr-2 h-4 w-4" />
+                    <span>My Orders</span>
+                  </Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <Settings className="mr-2 h-4 w-4" />
-                  <span>Account Settings</span>
+                <DropdownMenuItem asChild>
+                  <Link href="/account-settings" className="flex items-center">
+                    <Settings className="mr-2 h-4 w-4" />
+                    <span>Account Settings</span>
+                  </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
+                <DropdownMenuItem 
+                  onClick={() => {
+                    // In a real app, this would clear authentication tokens and redirect
+                    window.location.href = '/';
+                  }}
+                >
                   <LogOut className="mr-2 h-4 w-4" />
                   <span>Sign Out</span>
                 </DropdownMenuItem>

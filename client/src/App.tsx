@@ -8,6 +8,8 @@ import { ProductDetail } from "@/pages/product-detail";
 import { Cart } from "@/pages/cart";
 import { Checkout } from "@/pages/checkout";
 import { AdminDashboard } from "@/pages/admin-dashboard";
+import { MyOrders } from "@/pages/my-orders";
+import { AccountSettings } from "@/pages/account-settings";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -18,6 +20,8 @@ function Router() {
       <Route path="/cart" component={Cart} />
       <Route path="/checkout" component={Checkout} />
       <Route path="/admin" component={AdminDashboard} />
+      <Route path="/my-orders" component={MyOrders} />
+      <Route path="/account-settings" component={AccountSettings} />
       <Route component={NotFound} />
     </Switch>
   );

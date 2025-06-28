@@ -280,6 +280,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get user orders (mock endpoint for demo)
+  app.get('/api/orders/my-orders', async (req: TenantRequest, res) => {
+    try {
+      if (!req.tenant) {
+        return res.status(400).json({ error: 'Tenant not found' });
+      }
+      
+      // Get all orders for the tenant (in a real app, this would be filtered by user)
+      const orders = await storage.getOrdersByTenant(req.tenant.id);
+      res.json(orders);
+    } catch (error) {
+      console.error('Get orders error:', error);
+      res.status(500).json({ error: 'Failed to get orders' });
+    }
+  });
+
   // Get Paystack public key
   app.get('/api/payment/config', (req, res) => {
     res.json({
