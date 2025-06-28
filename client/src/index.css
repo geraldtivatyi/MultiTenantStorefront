@@ -1,0 +1,104 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: hsl(249, 10%, 98%);
+  --foreground: hsl(221, 14%, 11%);
+  --muted: hsl(240, 5%, 96%);
+  --muted-foreground: hsl(221, 8%, 45%);
+  --popover: hsl(0, 0%, 100%);
+  --popover-foreground: hsl(221, 14%, 11%);
+  --card: hsl(0, 0%, 100%);
+  --card-foreground: hsl(221, 14%, 11%);
+  --border: hsl(240, 5%, 90%);
+  --input: hsl(240, 5%, 90%);
+  --primary: hsl(248, 82%, 68%);
+  --primary-foreground: hsl(225, 100%, 98%);
+  --secondary: hsl(152, 76%, 36%);
+  --secondary-foreground: hsl(225, 100%, 98%);
+  --accent: hsl(42, 96%, 50%);
+  --accent-foreground: hsl(221, 14%, 11%);
+  --destructive: hsl(0, 84%, 60%);
+  --destructive-foreground: hsl(60, 9%, 98%);
+  --ring: hsl(248, 82%, 68%);
+  --radius: 0.5rem;
+  
+  /* Custom colors from design */
+  --text-color: hsl(221, 14%, 11%);
+  --error-color: hsl(0, 84%, 60%);
+  --success-color: hsl(152, 76%, 36%);
+  --warning-color: hsl(42, 96%, 50%);
+  --bg-color: hsl(249, 10%, 98%);
+}
+
+.dark {
+  --background: hsl(240, 10%, 4%);
+  --foreground: hsl(0, 0%, 98%);
+  --muted: hsl(240, 4%, 16%);
+  --muted-foreground: hsl(240, 5%, 65%);
+  --popover: hsl(240, 10%, 4%);
+  --popover-foreground: hsl(0, 0%, 98%);
+  --card: hsl(240, 10%, 4%);
+  --card-foreground: hsl(0, 0%, 98%);
+  --border: hsl(240, 4%, 16%);
+  --input: hsl(240, 4%, 16%);
+  --primary: hsl(248, 82%, 68%);
+  --primary-foreground: hsl(225, 100%, 98%);
+  --secondary: hsl(152, 76%, 36%);
+  --secondary-foreground: hsl(225, 100%, 98%);
+  --accent: hsl(42, 96%, 50%);
+  --accent-foreground: hsl(0, 0%, 98%);
+  --destructive: hsl(0, 84%, 60%);
+  --destructive-foreground: hsl(60, 9%, 98%);
+  --ring: hsl(248, 82%, 68%);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply font-sans antialiased bg-background text-foreground;
+    font-family: 'Inter', 'Roboto', sans-serif;
+  }
+}
+
+@layer utilities {
+  .text-primary-brand {
+    color: hsl(248, 82%, 68%);
+  }
+  
+  .text-secondary-brand {
+    color: hsl(152, 76%, 36%);
+  }
+  
+  .text-accent-brand {
+    color: hsl(42, 96%, 50%);
+  }
+  
+  .text-error-brand {
+    color: hsl(0, 84%, 60%);
+  }
+  
+  .bg-primary-brand {
+    background-color: hsl(248, 82%, 68%);
+  }
+  
+  .bg-secondary-brand {
+    background-color: hsl(152, 76%, 36%);
+  }
+  
+  .bg-accent-brand {
+    background-color: hsl(42, 96%, 50%);
+  }
+  
+  .bg-error-brand {
+    background-color: hsl(0, 84%, 60%);
+  }
+  
+  .border-primary-brand {
+    border-color: hsl(248, 82%, 68%);
+  }
+}

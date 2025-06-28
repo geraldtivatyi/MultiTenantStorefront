@@ -1,0 +1,79 @@
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { useCart } from "@/hooks/use-cart";
+import { formatPrice } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
+import type { Product } from "@shared/schema";
+
+interface ProductCardProps {
+  product: Product;
+  onViewDetails?: (product: Product) => void;
+}
+
+export function ProductCard({ product, onViewDetails }: ProductCardProps) {
+  const { addToCart, isAddingToCart } = useCart();
+  const { toast } = useToast();
+
+  const handleAddToCart = async () => {
+    try {
+      await addToCart({ productId: product.id, quantity: 1 });
+      toast({
+        title: "Added to cart",
+        description: `${product.name} has been added to your cart.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to add item to cart. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  return (
+    <Card className="bg-white rounded-lg shadow-md hover:shadow-xl transition-shadow duration-300 overflow-hidden">
+      <div 
+        className="w-full h-48 bg-gray-200 bg-cover bg-center cursor-pointer"
+        style={{
+          backgroundImage: product.imageUrl ? `url(${product.imageUrl})` : 'none'
+        }}
+        onClick={() => onViewDetails?.(product)}
+      >
+        {!product.imageUrl && (
+          <div className="w-full h-full flex items-center justify-center text-gray-400">
+            No Image
+          </div>
+        )}
+      </div>
+      
+      <CardContent className="p-6">
+        <h3 
+          className="text-lg font-semibold mb-2 cursor-pointer hover:text-primary-brand transition-colors"
+          onClick={() => onViewDetails?.(product)}
+        >
+          {product.name}
+        </h3>
+        <p className="text-gray-600 text-sm mb-4 line-clamp-2">
+          {product.description}
+        </p>
+        <div className="flex justify-between items-center">
+          <span className="text-2xl font-bold text-primary-brand">
+            {formatPrice(product.price)}
+          </span>
+          <Button 
+            className="bg-primary-brand text-white hover:bg-primary-brand/90 transition-colors duration-200"
+            onClick={handleAddToCart}
+            disabled={isAddingToCart || product.stock === 0}
+          >
+            {product.stock === 0 ? 'Out of Stock' : 'Add to Cart'}
+          </Button>
+        </div>
+        {product.stock && product.stock < 10 && product.stock > 0 && (
+          <p className="text-sm text-warning-color mt-2">
+            Only {product.stock} left in stock
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
