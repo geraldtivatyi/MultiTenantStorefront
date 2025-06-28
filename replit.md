@@ -117,6 +117,7 @@ This is a full-stack multi-tenant e-commerce platform built with React, Express.
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
-## Changelog
-Changelog:
-- June 28, 2025. Initial setup
+## Recent Changes
+- June 28, 2025: Initial multi-tenant e-commerce platform setup
+- June 28, 2025: Updated currency from USD to South African Rand (ZAR)
+- June 28, 2025: Changed demo store theme to "Creative Crafts Studio" - arts and crafts products
