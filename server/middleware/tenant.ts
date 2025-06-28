@@ -13,6 +13,8 @@ export function tenantMiddleware() {
       const host = req.get('host') || '';
       const subdomain = extractSubdomain(host);
 
+      console.log('DEBUG - Host:', host, 'Subdomain:', subdomain, 'URL:', req.url);
+
       if (!subdomain) {
         return res.status(400).json({ 
           error: 'Invalid subdomain', 
@@ -51,6 +53,11 @@ export function tenantMiddleware() {
 }
 
 function extractSubdomain(host: string): string | null {
+  // In development mode, always return 'demo'
+  if (process.env.NODE_ENV === 'development') {
+    return 'demo';
+  }
+
   // Handle different environments
   if (host.includes('localhost') || host.includes('127.0.0.1') || !host || host === '') {
     // For development, always use demo store
