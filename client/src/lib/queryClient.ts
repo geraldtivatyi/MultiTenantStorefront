@@ -12,9 +12,20 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
+  const sessionId = typeof window !== 'undefined' ? 
+    localStorage.getItem('sessionId') || Math.random().toString(36).substring(2) + Date.now().toString(36) : 
+    'server';
+
+  if (typeof window !== 'undefined' && !localStorage.getItem('sessionId')) {
+    localStorage.setItem('sessionId', sessionId);
+  }
+
   const res = await fetch(url, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    headers: {
+      ...(data ? { "Content-Type": "application/json" } : {}),
+      "x-session-id": sessionId,
+    },
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
   });
@@ -29,8 +40,19 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
+    const sessionId = typeof window !== 'undefined' ? 
+      localStorage.getItem('sessionId') || Math.random().toString(36).substring(2) + Date.now().toString(36) : 
+      'server';
+
+    if (typeof window !== 'undefined' && !localStorage.getItem('sessionId')) {
+      localStorage.setItem('sessionId', sessionId);
+    }
+
     const res = await fetch(queryKey[0] as string, {
       credentials: "include",
+      headers: {
+        "x-session-id": sessionId,
+      },
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {

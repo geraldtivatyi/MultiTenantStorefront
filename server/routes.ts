@@ -84,7 +84,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: 'Tenant not found' });
       }
 
-      const sessionId = req.sessionID || 'anonymous';
+      const sessionId = req.headers['x-session-id'] as string || 'anonymous';
       const cartItems = await storage.getCartItems(sessionId, req.tenant.id);
       res.json(cartItems);
     } catch (error) {
@@ -99,7 +99,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: 'Tenant not found' });
       }
 
-      const sessionId = req.sessionID || 'anonymous';
+      const sessionId = req.headers['x-session-id'] as string || 'anonymous';
       const cartItemData = insertCartItemSchema.parse({
         ...req.body,
         sessionId,
@@ -169,7 +169,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: 'Tenant not found' });
       }
 
-      const sessionId = req.sessionID || 'anonymous';
+      const sessionId = req.headers['x-session-id'] as string || 'anonymous';
       const checkoutData = checkoutSchema.parse(req.body);
 
       // Get cart items
@@ -211,6 +211,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const paystackData = await paystackService.initializeTransaction({
         amount: total,
         email: checkoutData.customerEmail,
+        currency: 'ZAR',
         reference: paystackService.generateReference('ORD'),
         metadata: {
           orderId: order.id,

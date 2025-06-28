@@ -4,6 +4,7 @@ import type { Tenant } from "@shared/schema";
 
 export interface TenantRequest extends Request {
   tenant?: Tenant;
+  sessionID?: string;
 }
 
 export function tenantMiddleware() {
@@ -12,8 +13,6 @@ export function tenantMiddleware() {
       // Extract subdomain from Host header
       const host = req.get('host') || '';
       const subdomain = extractSubdomain(host);
-
-      console.log('DEBUG - Host:', host, 'Subdomain:', subdomain, 'URL:', req.url);
 
       if (!subdomain) {
         return res.status(400).json({ 
