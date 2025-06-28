@@ -1,16 +1,9 @@
 import { Request, Response, NextFunction } from "express";
 import { storage } from "../storage";
+import type { Tenant } from "@shared/schema";
 
 export interface TenantRequest extends Request {
-  tenant?: {
-    id: number;
-    name: string;
-    subdomain: string;
-    ownerEmail: string;
-    isActive: boolean;
-    heroTitle?: string;
-    heroSubtitle?: string;
-  };
+  tenant?: Tenant;
 }
 
 export function tenantMiddleware() {
@@ -59,9 +52,9 @@ export function tenantMiddleware() {
 
 function extractSubdomain(host: string): string | null {
   // Handle different environments
-  if (host.includes('localhost') || host.includes('127.0.0.1')) {
-    // For development, we'll use a query parameter or header
-    return 'demo'; // Default to demo store for local development
+  if (host.includes('localhost') || host.includes('127.0.0.1') || !host || host === '') {
+    // For development, always use demo store
+    return 'demo';
   }
 
   // Remove port if present
@@ -72,7 +65,8 @@ function extractSubdomain(host: string): string | null {
   
   // Need at least 3 parts for subdomain (subdomain.domain.com)
   if (parts.length < 3) {
-    return null;
+    // For development and single domain setups, default to demo
+    return 'demo';
   }
 
   // Return the first part as subdomain
