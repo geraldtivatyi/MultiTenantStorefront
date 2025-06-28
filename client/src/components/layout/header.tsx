@@ -52,6 +52,12 @@ export function Header() {
               >
                 Contact
               </Link>
+              <Link 
+                href="/admin" 
+                className="text-gray-600 hover:text-orange-500 px-3 py-2 rounded-md text-sm font-medium transition-colors border border-orange-500"
+              >
+                Admin
+              </Link>
             </div>
           </nav>
 

@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { useCart } from "@/hooks/use-cart";
 import { useToast } from "@/hooks/use-toast";
 import { formatPrice } from "@/lib/utils";
-import { ArrowLeft, Star, Minus, Plus, Cpu, Monitor, Battery } from "lucide-react";
+import { ArrowLeft, Star, Minus, Plus, Palette, Award, Heart } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
@@ -188,14 +188,32 @@ export function ProductDetail() {
                     >
                       {product.stock === 0 ? 'Out of Stock' : `Add to Cart - ${formatPrice(parseFloat(product.price) * quantity)}`}
                     </Button>
-                    <Button
-                      variant="outline"
-                      className="w-full py-3 text-lg font-semibold border-accent-brand text-accent-brand hover:bg-accent-brand hover:text-white transition-colors duration-200"
-                      size="lg"
-                      disabled={product.stock === 0}
-                    >
-                      Buy Now
-                    </Button>
+                    <Link href="/checkout">
+                      <Button
+                        variant="outline"
+                        className="w-full py-3 text-lg font-semibold border-orange-500 text-orange-500 hover:bg-orange-500 hover:text-white transition-colors duration-200"
+                        size="lg"
+                        disabled={product.stock === 0}
+                        onClick={async () => {
+                          if (product.stock === 0) return;
+                          try {
+                            await addToCart({ productId: product.id, quantity });
+                            toast({
+                              title: "Added to cart",
+                              description: `${quantity} x ${product.name} added to your cart.`,
+                            });
+                          } catch (error) {
+                            toast({
+                              title: "Error",
+                              description: "Failed to add item to cart. Please try again.",
+                              variant: "destructive",
+                            });
+                          }
+                        }}
+                      >
+                        Buy Now
+                      </Button>
+                    </Link>
                   </div>
 
                   {product.category && (
@@ -211,28 +229,28 @@ export function ProductDetail() {
 
             {/* Product Features */}
             <div className="mt-16">
-              <h2 className="text-2xl font-bold mb-8">Key Features</h2>
+              <h2 className="text-2xl font-bold mb-8">Why Choose Our Products</h2>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                 <div className="text-center">
-                  <div className="bg-primary-brand/10 rounded-full p-4 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-                    <Cpu className="text-primary-brand text-xl h-6 w-6" />
+                  <div className="bg-orange-500/10 rounded-full p-4 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+                    <Palette className="text-orange-500 text-xl h-6 w-6" />
                   </div>
-                  <h3 className="font-semibold mb-2">High Performance</h3>
-                  <p className="text-muted-foreground">Advanced technology for ultimate performance</p>
+                  <h3 className="font-semibold mb-2">Premium Quality</h3>
+                  <p className="text-muted-foreground">Professional-grade materials for lasting creativity</p>
                 </div>
                 <div className="text-center">
-                  <div className="bg-primary-brand/10 rounded-full p-4 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-                    <Monitor className="text-primary-brand text-xl h-6 w-6" />
+                  <div className="bg-orange-500/10 rounded-full p-4 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+                    <Award className="text-orange-500 text-xl h-6 w-6" />
                   </div>
-                  <h3 className="font-semibold mb-2">Superior Display</h3>
-                  <p className="text-muted-foreground">Crystal clear visuals with vibrant colors</p>
+                  <h3 className="font-semibold mb-2">Artist Approved</h3>
+                  <p className="text-muted-foreground">Trusted by creative professionals worldwide</p>
                 </div>
                 <div className="text-center">
-                  <div className="bg-primary-brand/10 rounded-full p-4 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-                    <Battery className="text-primary-brand text-xl h-6 w-6" />
+                  <div className="bg-orange-500/10 rounded-full p-4 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+                    <Heart className="text-orange-500 text-xl h-6 w-6" />
                   </div>
-                  <h3 className="font-semibold mb-2">Long Battery Life</h3>
-                  <p className="text-muted-foreground">All-day power for your busy lifestyle</p>
+                  <h3 className="font-semibold mb-2">Made with Love</h3>
+                  <p className="text-muted-foreground">Carefully curated for passionate creators</p>
                 </div>
               </div>
             </div>

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "wouter";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
@@ -7,13 +8,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useCart } from "@/hooks/use-cart";
+import { useToast } from "@/hooks/use-toast";
 import { calculateCartTotal, formatPrice } from "@/lib/utils";
 import { ArrowLeft, ShoppingBag } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export function Cart() {
+  const [promoCode, setPromoCode] = useState("");
+  const [discount, setDiscount] = useState(0);
   const { cartItems, isLoading } = useCart();
+  const { toast } = useToast();
   const { subtotal, tax, total } = calculateCartTotal(cartItems);
+  const finalTotal = total - discount;
 
   return (
     <div className="min-h-screen bg-background">
@@ -106,10 +112,16 @@ export function Cart() {
                       <span>Tax</span>
                       <span>{formatPrice(tax)}</span>
                     </div>
+                    {discount > 0 && (
+                      <div className="flex justify-between text-secondary-brand">
+                        <span>Discount ({promoCode})</span>
+                        <span>-{formatPrice(discount)}</span>
+                      </div>
+                    )}
                     <div className="border-t pt-3">
                       <div className="flex justify-between text-lg font-bold">
                         <span>Total</span>
-                        <span className="text-primary-brand">{formatPrice(total)}</span>
+                        <span className="text-primary-brand">{formatPrice(finalTotal)}</span>
                       </div>
                     </div>
                   </div>
@@ -130,11 +142,48 @@ export function Cart() {
                         id="promo"
                         placeholder="Enter code" 
                         className="flex-1"
+                        value={promoCode}
+                        onChange={(e) => setPromoCode(e.target.value)}
                       />
-                      <Button variant="outline" disabled>
+                      <Button 
+                        variant="outline"
+                        onClick={() => {
+                          const code = promoCode.toUpperCase();
+                          if (code === 'CRAFT10') {
+                            setDiscount(subtotal * 0.1);
+                            toast({
+                              title: "Promo code applied!",
+                              description: "10% discount applied to your order.",
+                            });
+                          } else if (code === 'ARTIST20') {
+                            setDiscount(subtotal * 0.2);
+                            toast({
+                              title: "Promo code applied!",
+                              description: "20% discount applied to your order.",
+                            });
+                          } else if (code === '') {
+                            toast({
+                              title: "Please enter a promo code",
+                              variant: "destructive",
+                            });
+                          } else {
+                            toast({
+                              title: "Invalid promo code",
+                              description: "Please check your code and try again.",
+                              variant: "destructive",
+                            });
+                          }
+                        }}
+                        disabled={!promoCode.trim()}
+                      >
                         Apply
                       </Button>
                     </div>
+                    {discount === 0 && (
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Try codes: CRAFT10, ARTIST20
+                      </p>
+                    )}
                   </div>
                 </CardContent>
               </Card>
