@@ -40,10 +40,10 @@ export function Storefront() {
         <div 
           className="relative bg-center bg-cover"
           style={{
-            backgroundImage: "url('https://images.unsplash.com/photo-1498049794561-7780e7231661?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&h=600')"
+            backgroundImage: "url('https://images.unsplash.com/photo-1513475382585-d06e58bcb0e0?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&h=600')"
           }}
         >
-          <div className="absolute inset-0 bg-gradient-to-r from-primary-brand/80 to-purple-600/80"></div>
+          <div className="absolute inset-0 bg-gradient-to-r from-orange-500/70 to-pink-600/70"></div>
           <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
             <div className="text-center">
               {tenantLoading ? (
@@ -62,7 +62,7 @@ export function Storefront() {
                 </>
               )}
               <Link href="#products">
-                <button className="bg-white text-primary-brand px-8 py-3 rounded-lg text-lg font-semibold hover:bg-gray-100 transition-colors duration-200">
+                <button className="bg-white text-orange-600 px-8 py-3 rounded-lg text-lg font-semibold hover:bg-gray-100 transition-colors duration-200">
                   Shop Now
                 </button>
               </Link>
