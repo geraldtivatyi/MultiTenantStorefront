@@ -1,5 +1,6 @@
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { Link, useSearch } from "wouter";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { ProductCard } from "@/components/product/product-card";
@@ -10,12 +11,27 @@ import { AlertCircle, Truck, Shield, RotateCcw } from "lucide-react";
 import type { Product } from "@shared/schema";
 
 export function Storefront() {
+  const searchParams = useSearch();
+  const searchQuery = new URLSearchParams(searchParams).get('search') || '';
+  
   const { data: tenant, isLoading: tenantLoading, error: tenantError } = useTenant();
   
   const { data: products = [], isLoading: productsLoading, error: productsError } = useQuery<Product[]>({
     queryKey: ["/api/storefront/products"],
     enabled: !!tenant,
   });
+
+  // Filter products based on search query
+  const filteredProducts = useMemo(() => {
+    if (!searchQuery.trim()) return products;
+    
+    const query = searchQuery.toLowerCase();
+    return products.filter(product => 
+      product.name.toLowerCase().includes(query) ||
+      (product.description && product.description.toLowerCase().includes(query)) ||
+      (product.category && product.category.toLowerCase().includes(query))
+    );
+  }, [products, searchQuery]);
 
   if (tenantError) {
     return (
@@ -74,8 +90,24 @@ export function Storefront() {
       {/* Featured Products */}
       <section id="products" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <div className="text-center mb-12">
-          <h2 className="text-3xl font-bold text-foreground mb-4">Featured Products</h2>
-          <p className="text-muted-foreground text-lg">Handpicked items just for you</p>
+          {searchQuery ? (
+            <div>
+              <h2 className="text-3xl font-bold text-foreground mb-2">Search Results</h2>
+              <p className="text-muted-foreground mb-4">
+                Showing results for "<span className="font-medium text-foreground">{searchQuery}</span>"
+              </p>
+              {filteredProducts.length === 0 && products.length > 0 && (
+                <p className="text-muted-foreground">
+                  No products found. <Link href="/" className="text-primary-brand hover:underline">View all products</Link>
+                </p>
+              )}
+            </div>
+          ) : (
+            <div>
+              <h2 className="text-3xl font-bold text-foreground mb-4">Featured Products</h2>
+              <p className="text-muted-foreground text-lg">Handpicked items just for you</p>
+            </div>
+          )}
         </div>
 
         {productsError ? (
@@ -96,13 +128,15 @@ export function Storefront() {
               </div>
             ))}
           </div>
-        ) : products.length === 0 ? (
+        ) : filteredProducts.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-muted-foreground text-lg">No products available at the moment.</p>
+            <p className="text-muted-foreground text-lg">
+              {searchQuery ? "No products found matching your search." : "No products available at the moment."}
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-            {products.map((product) => (
+            {filteredProducts.map((product) => (
               <ProductCard 
                 key={product.id} 
                 product={product}

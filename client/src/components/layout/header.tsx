@@ -1,11 +1,17 @@
-import { ShoppingCart, Search, User, Menu } from "lucide-react";
+import { useState } from "react";
+import { ShoppingCart, Search, User, Menu, Settings, LogOut, Package } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useTenant } from "@/hooks/use-tenant";
 import { useCart } from "@/hooks/use-cart";
 import { Badge } from "@/components/ui/badge";
 
 export function Header() {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const { data: tenant } = useTenant();
   const { cartItemCount } = useCart();
 
@@ -62,9 +68,51 @@ export function Header() {
           </nav>
 
           <div className="flex items-center space-x-4">
-            <Button variant="ghost" size="icon" className="text-gray-600 hover:text-primary-brand">
-              <Search className="h-5 w-5" />
-            </Button>
+            {/* Search Dialog */}
+            <Dialog open={isSearchOpen} onOpenChange={setIsSearchOpen}>
+              <DialogTrigger asChild>
+                <Button variant="ghost" size="icon" className="text-gray-600 hover:text-primary-brand">
+                  <Search className="h-5 w-5" />
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Search Products</DialogTitle>
+                  <DialogDescription>
+                    Search for arts and crafts products in our collection.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="flex items-center space-x-2">
+                  <div className="grid flex-1 gap-2">
+                    <Input
+                      placeholder="Search for products..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && searchQuery.trim()) {
+                          window.location.href = `/?search=${encodeURIComponent(searchQuery)}`;
+                          setIsSearchOpen(false);
+                        }
+                      }}
+                    />
+                  </div>
+                  <Button 
+                    onClick={() => {
+                      if (searchQuery.trim()) {
+                        window.location.href = `/?search=${encodeURIComponent(searchQuery)}`;
+                        setIsSearchOpen(false);
+                      }
+                    }}
+                    disabled={!searchQuery.trim()}
+                  >
+                    Search
+                  </Button>
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  Try searching for: "paint", "brushes", "canvas", "polymer clay"
+                </div>
+              </DialogContent>
+            </Dialog>
             
             <Link href="/cart">
               <Button variant="ghost" size="icon" className="text-gray-600 hover:text-primary-brand relative">
@@ -77,9 +125,38 @@ export function Header() {
               </Button>
             </Link>
             
-            <Button variant="ghost" size="icon" className="text-gray-600 hover:text-primary-brand">
-              <User className="h-5 w-5" />
-            </Button>
+            {/* User Profile Dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="text-gray-600 hover:text-primary-brand">
+                  <User className="h-5 w-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <div className="flex items-center justify-start gap-2 p-2">
+                  <div className="flex flex-col space-y-1">
+                    <p className="text-sm font-medium leading-none">Guest User</p>
+                    <p className="text-xs leading-none text-muted-foreground">
+                      guest@example.com
+                    </p>
+                  </div>
+                </div>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem>
+                  <Package className="mr-2 h-4 w-4" />
+                  <span>My Orders</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem>
+                  <Settings className="mr-2 h-4 w-4" />
+                  <span>Account Settings</span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  <span>Sign Out</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
             <Button variant="ghost" size="icon" className="md:hidden text-gray-600 hover:text-primary-brand">
               <Menu className="h-5 w-5" />
