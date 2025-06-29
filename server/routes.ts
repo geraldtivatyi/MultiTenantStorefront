@@ -703,8 +703,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get user orders (mock endpoint for demo)
-  app.get('/api/orders/my-orders', async (req: TenantRequest, res) => {
+  // Get user orders
+  app.get('/api/orders/my-orders', requireAuth, async (req: TenantRequest, res) => {
     try {
       if (!req.tenant) {
         return res.status(400).json({ error: 'Tenant not found' });
@@ -716,6 +716,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Get orders error:', error);
       res.status(500).json({ error: 'Failed to get orders' });
+    }
+  });
+
+  // Get order items for a specific order
+  app.get('/api/orders/:orderId/items', requireAuth, async (req: TenantRequest, res) => {
+    try {
+      const orderId = parseInt(req.params.orderId);
+      if (!orderId) {
+        return res.status(400).json({ error: 'Invalid order ID' });
+      }
+
+      const orderItems = await storage.getOrderItems(orderId);
+      res.json(orderItems);
+    } catch (error) {
+      console.error('Get order items error:', error);
+      res.status(500).json({ error: 'Failed to get order items' });
+    }
+  });
+
+  // Reorder - add all items from an order back to cart
+  app.post('/api/orders/:orderId/reorder', requireAuth, async (req: TenantRequest, res) => {
+    try {
+      const orderId = parseInt(req.params.orderId);
+      if (!orderId) {
+        return res.status(400).json({ error: 'Invalid order ID' });
+      }
+
+      if (!req.tenant) {
+        return res.status(400).json({ error: 'Tenant not found' });
+      }
+
+      const sessionId = req.sessionID!;
+      
+      // Get order items
+      const orderItems = await storage.getOrderItems(orderId);
+      if (orderItems.length === 0) {
+        return res.status(404).json({ error: 'Order not found or has no items' });
+      }
+
+      // Add each item to cart
+      const addedItems = [];
+      for (const item of orderItems) {
+        try {
+          const cartItem = await storage.addToCart({
+            sessionId,
+            productId: item.productId,
+            quantity: item.quantity,
+          });
+          addedItems.push(cartItem);
+        } catch (error) {
+          console.error(`Failed to add item ${item.productId} to cart:`, error);
+          // Continue with other items even if one fails
+        }
+      }
+
+      res.json({ 
+        message: 'Items added to cart successfully', 
+        addedItemsCount: addedItems.length,
+        totalItems: orderItems.length 
+      });
+    } catch (error) {
+      console.error('Reorder error:', error);
+      res.status(500).json({ error: 'Failed to reorder items' });
     }
   });
 
