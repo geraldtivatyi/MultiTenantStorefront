@@ -57,10 +57,7 @@ export class PaystackService {
           'Authorization': `Bearer ${this.config.secretKey}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          ...data,
-          amount: Math.round(data.amount * 100), // Convert to kobo
-        }),
+        body: JSON.stringify(data),
       });
 
       const result = await response.json();

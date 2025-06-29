@@ -14,7 +14,7 @@ export function useCart() {
 
   const addToCartMutation = useMutation({
     mutationFn: async (data: { productId: number; quantity: number }) => {
-      const response = await apiRequest("POST", "/api/cart", data);
+      const response = await apiRequest("/api/cart", "POST", data);
       return response.json();
     },
     onSuccess: () => {
@@ -24,7 +24,7 @@ export function useCart() {
 
   const updateCartMutation = useMutation({
     mutationFn: async (data: { id: number; quantity: number }) => {
-      const response = await apiRequest("PUT", `/api/cart/${data.id}`, { quantity: data.quantity });
+      const response = await apiRequest(`/api/cart/${data.id}`, "PUT", { quantity: data.quantity });
       return response.json();
     },
     onSuccess: () => {
@@ -34,7 +34,7 @@ export function useCart() {
 
   const removeFromCartMutation = useMutation({
     mutationFn: async (id: number) => {
-      await apiRequest("DELETE", `/api/cart/${id}`);
+      await apiRequest(`/api/cart/${id}`, "DELETE");
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/cart"] });
