@@ -523,10 +523,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const sessionId = req.headers['x-session-id'] as string || 'anonymous';
+      console.log('Add to cart - sessionId:', sessionId, 'body:', req.body);
+      
       const cartItemData = insertCartItemSchema.parse({
         ...req.body,
         sessionId,
       });
+      
+      console.log('Parsed cart item data:', cartItemData);
 
       // Verify product belongs to tenant
       const product = await storage.getProduct(cartItemData.productId, req.tenant.id);
