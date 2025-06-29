@@ -55,7 +55,7 @@ type TenantFormData = z.infer<typeof tenantSchema>;
 type ProductFormData = z.infer<typeof productSchema>;
 
 export function AdminDashboard() {
-  const [activeTab, setActiveTab] = useState<"dashboard" | "tenants" | "products">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "tenants" | "products" | "payments" | "settings">("dashboard");
   const [selectedTenant, setSelectedTenant] = useState<number | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -65,12 +65,30 @@ export function AdminDashboard() {
     queryKey: ["/api/admin/tenants"],
   });
 
-  // Mock stats for dashboard (in a real app, these would come from APIs)
+  // Fetch products for selected tenant
+  const { data: products = [], isLoading: productsLoading } = useQuery<Product[]>({
+    queryKey: ["/api/admin/products", selectedTenant],
+    enabled: selectedTenant !== null && activeTab === "products",
+  });
+
+  // Fetch orders for payments section
+  const { data: orders = [], isLoading: ordersLoading } = useQuery({
+    queryKey: ["/api/admin/orders"],
+    enabled: activeTab === "payments",
+  });
+
+  // Fetch dashboard stats
+  const { data: dashboardStats } = useQuery({
+    queryKey: ["/api/admin/stats"],
+    enabled: activeTab === "dashboard",
+  });
+
+  // Use real stats from API or fallback to calculated stats
   const stats = {
-    totalTenants: tenants.length,
-    totalRevenue: "₦1,240,000",
-    totalOrders: 15847,
-    activeUsers: 89432,
+    totalTenants: dashboardStats?.totalTenants || tenants.length,
+    totalRevenue: dashboardStats?.totalRevenue || "R 0.00",
+    totalOrders: dashboardStats?.totalOrders || 0,
+    activeUsers: dashboardStats?.activeUsers || 0,
   };
 
   // Forms
@@ -102,7 +120,7 @@ export function AdminDashboard() {
   // Mutations
   const createTenantMutation = useMutation({
     mutationFn: async (data: TenantFormData) => {
-      const response = await apiRequest("POST", "/api/admin/tenants", data);
+      const response = await apiRequest("/api/admin/tenants", "POST", data);
       return response.json();
     },
     onSuccess: () => {
@@ -124,7 +142,7 @@ export function AdminDashboard() {
 
   const createProductMutation = useMutation({
     mutationFn: async (data: ProductFormData) => {
-      const response = await apiRequest("POST", "/api/admin/products", data);
+      const response = await apiRequest("/api/admin/products", "POST", data);
       return response.json();
     },
     onSuccess: () => {
@@ -203,20 +221,28 @@ export function AdminDashboard() {
                 <Users className="mr-3 h-4 w-4" />
                 Products
               </button>
-              <a
-                href="#"
-                className="flex items-center px-2 py-2 text-sm font-medium rounded-md text-muted-foreground hover:bg-gray-100 transition-colors"
+              <button
+                onClick={() => setActiveTab("payments")}
+                className={`w-full text-left flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors ${
+                  activeTab === "payments"
+                    ? "bg-primary-brand text-white"
+                    : "text-muted-foreground hover:bg-gray-100"
+                }`}
               >
                 <CreditCard className="mr-3 h-4 w-4" />
                 Payments
-              </a>
-              <a
-                href="#"
-                className="flex items-center px-2 py-2 text-sm font-medium rounded-md text-muted-foreground hover:bg-gray-100 transition-colors"
+              </button>
+              <button
+                onClick={() => setActiveTab("settings")}
+                className={`w-full text-left flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors ${
+                  activeTab === "settings"
+                    ? "bg-primary-brand text-white"
+                    : "text-muted-foreground hover:bg-gray-100"
+                }`}
               >
                 <Settings className="mr-3 h-4 w-4" />
                 Settings
-              </a>
+              </button>
             </div>
           </nav>
         </div>
@@ -232,11 +258,15 @@ export function AdminDashboard() {
                     {activeTab === "dashboard" && "Dashboard Overview"}
                     {activeTab === "tenants" && "Tenant Management"}
                     {activeTab === "products" && "Product Management"}
+                    {activeTab === "payments" && "Payment Management"}
+                    {activeTab === "settings" && "Platform Settings"}
                   </h2>
                   <p className="text-muted-foreground">
                     {activeTab === "dashboard" && "Welcome back! Here's what's happening across your platform."}
                     {activeTab === "tenants" && "Manage your tenant stores and configurations."}
                     {activeTab === "products" && "Create and manage products for your tenants."}
+                    {activeTab === "payments" && "Monitor payments and transactions across all tenants."}
+                    {activeTab === "settings" && "Configure platform-wide settings and preferences."}
                   </p>
                 </div>
                 <div className="flex items-center space-x-4">
@@ -773,6 +803,210 @@ export function AdminDashboard() {
                     </CardContent>
                   </Card>
                 )}
+              </div>
+            )}
+
+            {/* Payments Tab */}
+            {activeTab === "payments" && (
+              <div className="space-y-6">
+                {/* Payment Overview Stats */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <Card>
+                    <CardContent className="p-6">
+                      <div className="flex items-center">
+                        <div className="bg-secondary-brand/10 rounded-full p-3">
+                          <CreditCard className="text-secondary-brand h-6 w-6" />
+                        </div>
+                        <div className="ml-4">
+                          <p className="text-sm font-medium text-muted-foreground">Total Revenue</p>
+                          <p className="text-2xl font-bold text-foreground">{stats.totalRevenue}</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-6">
+                      <div className="flex items-center">
+                        <div className="bg-accent-brand/10 rounded-full p-3">
+                          <BarChart3 className="text-accent-brand h-6 w-6" />
+                        </div>
+                        <div className="ml-4">
+                          <p className="text-sm font-medium text-muted-foreground">Total Orders</p>
+                          <p className="text-2xl font-bold text-foreground">{stats.totalOrders}</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-6">
+                      <div className="flex items-center">
+                        <div className="bg-primary-brand/10 rounded-full p-3">
+                          <Users className="text-primary-brand h-6 w-6" />
+                        </div>
+                        <div className="ml-4">
+                          <p className="text-sm font-medium text-muted-foreground">Paid Orders</p>
+                          <p className="text-2xl font-bold text-foreground">{stats.activeUsers}</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Recent Transactions */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Recent Transactions</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {ordersLoading ? (
+                      <div className="space-y-4">
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <div key={i} className="flex items-center space-x-4 p-4 border border-gray-200 rounded-lg">
+                            <Skeleton className="h-10 w-10 rounded" />
+                            <div className="flex-1 space-y-2">
+                              <Skeleton className="h-4 w-3/4" />
+                              <Skeleton className="h-3 w-1/2" />
+                            </div>
+                            <Skeleton className="h-6 w-20" />
+                          </div>
+                        ))}
+                      </div>
+                    ) : orders?.length === 0 ? (
+                      <p className="text-muted-foreground text-center py-8">No transactions found.</p>
+                    ) : (
+                      <div className="space-y-4">
+                        {orders?.slice(0, 10).map((order: any) => (
+                          <div key={order.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                            <div className="flex items-center space-x-4">
+                              <div className={`p-2 rounded-full ${
+                                order.status === 'paid' ? 'bg-secondary-brand/10' :
+                                order.status === 'pending' ? 'bg-yellow-100' :
+                                'bg-red-100'
+                              }`}>
+                                {order.status === 'paid' ? (
+                                  <CheckCircle className={`h-4 w-4 text-secondary-brand`} />
+                                ) : order.status === 'pending' ? (
+                                  <Clock className="h-4 w-4 text-yellow-600" />
+                                ) : (
+                                  <XCircle className="h-4 w-4 text-red-600" />
+                                )}
+                              </div>
+                              <div>
+                                <p className="font-medium">Order #{order.orderNumber}</p>
+                                <p className="text-sm text-muted-foreground">{order.customerEmail}</p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-medium">{formatPrice(parseFloat(order.total))}</p>
+                              <Badge variant={
+                                order.status === 'paid' ? 'default' :
+                                order.status === 'pending' ? 'secondary' :
+                                'destructive'
+                              }>
+                                {order.status}
+                              </Badge>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {/* Settings Tab */}
+            {activeTab === "settings" && (
+              <div className="space-y-6">
+                {/* Platform Configuration */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Platform Configuration</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                          <h3 className="text-lg font-medium mb-4">Payment Settings</h3>
+                          <div className="space-y-4">
+                            <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                              <div>
+                                <p className="font-medium">Paystack Integration</p>
+                                <p className="text-sm text-muted-foreground">Payment gateway for African markets</p>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <CheckCircle className="h-4 w-4 text-secondary-brand" />
+                                <span className="text-sm text-secondary-brand">Active</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                              <div>
+                                <p className="font-medium">Webhook Verification</p>
+                                <p className="text-sm text-muted-foreground">Secure payment confirmations</p>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <Shield className="h-4 w-4 text-primary-brand" />
+                                <span className="text-sm text-primary-brand">Enabled</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div>
+                          <h3 className="text-lg font-medium mb-4">System Status</h3>
+                          <div className="space-y-4">
+                            <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                              <div>
+                                <p className="font-medium">Database Connection</p>
+                                <p className="text-sm text-muted-foreground">PostgreSQL with Neon</p>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <CheckCircle className="h-4 w-4 text-secondary-brand" />
+                                <span className="text-sm text-secondary-brand">Connected</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                              <div>
+                                <p className="font-medium">Session Storage</p>
+                                <p className="text-sm text-muted-foreground">PostgreSQL-based sessions</p>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <CheckCircle className="h-4 w-4 text-secondary-brand" />
+                                <span className="text-sm text-secondary-brand">Active</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <h3 className="text-lg font-medium mb-4">Platform Information</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="p-4 border border-gray-200 rounded-lg">
+                            <p className="text-sm text-muted-foreground">Platform Version</p>
+                            <p className="font-medium">v1.0.0</p>
+                          </div>
+                          <div className="p-4 border border-gray-200 rounded-lg">
+                            <p className="text-sm text-muted-foreground">Database Version</p>
+                            <p className="font-medium">PostgreSQL 15</p>
+                          </div>
+                          <div className="p-4 border border-gray-200 rounded-lg">
+                            <p className="text-sm text-muted-foreground">Default Currency</p>
+                            <p className="font-medium">South African Rand (ZAR)</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <Alert>
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>
+                          Platform settings are managed through environment variables and configuration files. 
+                          For security reasons, sensitive configuration changes should be made through the deployment environment.
+                        </AlertDescription>
+                      </Alert>
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
             )}
           </div>

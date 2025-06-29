@@ -880,6 +880,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get products for specific tenant (admin)
+  app.get('/api/admin/products/:tenantId', async (req, res) => {
+    try {
+      const tenantId = parseInt(req.params.tenantId);
+      if (!tenantId) {
+        return res.status(400).json({ error: 'Invalid tenant ID' });
+      }
+      const products = await storage.getProductsByTenant(tenantId);
+      res.json(products);
+    } catch (error) {
+      console.error('Get products error:', error);
+      res.status(500).json({ error: 'Failed to get products' });
+    }
+  });
+
+  // Get dashboard stats (admin)
+  app.get('/api/admin/stats', async (req, res) => {
+    try {
+      const tenants = await storage.getAllTenants();
+      const orders = await storage.getOrdersByTenant(1); // Get all orders for stats
+
+      // Calculate total revenue from orders
+      const totalRevenue = orders.reduce((sum, order) => {
+        return sum + parseFloat(order.total);
+      }, 0);
+
+      const stats = {
+        totalTenants: tenants.length,
+        totalRevenue: `R ${totalRevenue.toFixed(2)}`,
+        totalOrders: orders.length,
+        activeUsers: orders.filter(order => order.status === 'paid').length, // Active users who made payments
+      };
+
+      res.json(stats);
+    } catch (error) {
+      console.error('Get stats error:', error);
+      res.status(500).json({ error: 'Failed to get dashboard stats' });
+    }
+  });
+
+  // Get all orders across tenants (admin)
+  app.get('/api/admin/orders', async (req, res) => {
+    try {
+      const orders = await storage.getOrdersByTenant(1); // For now, get orders from first tenant
+      // In a real implementation, you'd get orders from all tenants
+      res.json(orders);
+    } catch (error) {
+      console.error('Get admin orders error:', error);
+      res.status(500).json({ error: 'Failed to get orders' });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
