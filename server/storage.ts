@@ -2,6 +2,8 @@ import {
   tenants, 
   users, 
   userSessions,
+  userAddresses,
+  userPreferences,
   products, 
   cartItems, 
   orders, 
@@ -13,6 +15,10 @@ import {
   type InsertUser,
   type UserSession,
   type InsertUserSession,
+  type UserAddress,
+  type InsertUserAddress,
+  type UserPreferences,
+  type InsertUserPreferences,
   type Product,
   type InsertProduct,
   type CartItem,
@@ -34,6 +40,7 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUserLastLogin(id: number): Promise<void>;
+  updateUserProfile(id: number, updates: Partial<InsertUser>): Promise<User | undefined>;
 
   // Session management
   createUserSession(session: InsertUserSession): Promise<UserSession>;
@@ -74,6 +81,19 @@ export interface IStorage {
   createPaymentTransaction(transaction: InsertPaymentTransaction): Promise<PaymentTransaction>;
   getPaymentTransactionByReference(reference: string): Promise<PaymentTransaction | undefined>;
   updatePaymentTransaction(id: number, updates: Partial<InsertPaymentTransaction>): Promise<PaymentTransaction | undefined>;
+
+  // User addresses
+  getUserAddresses(userId: number): Promise<UserAddress[]>;
+  getUserDefaultAddress(userId: number): Promise<UserAddress | undefined>;
+  createUserAddress(address: InsertUserAddress): Promise<UserAddress>;
+  updateUserAddress(id: number, updates: Partial<InsertUserAddress>): Promise<UserAddress | undefined>;
+  deleteUserAddress(id: number): Promise<void>;
+  setDefaultAddress(userId: number, addressId: number): Promise<void>;
+
+  // User preferences
+  getUserPreferences(userId: number): Promise<UserPreferences | undefined>;
+  createUserPreferences(preferences: InsertUserPreferences): Promise<UserPreferences>;
+  updateUserPreferences(userId: number, updates: Partial<InsertUserPreferences>): Promise<UserPreferences | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -106,6 +126,18 @@ export class DatabaseStorage implements IStorage {
         updatedAt: new Date()
       })
       .where(eq(users.id, id));
+  }
+
+  async updateUserProfile(id: number, updates: Partial<InsertUser>): Promise<User | undefined> {
+    const [user] = await db
+      .update(users)
+      .set({ 
+        ...updates,
+        updatedAt: new Date()
+      })
+      .where(eq(users.id, id))
+      .returning();
+    return user || undefined;
   }
 
   // Session methods
@@ -301,6 +333,74 @@ export class DatabaseStorage implements IStorage {
       .where(eq(paymentTransactions.id, id))
       .returning();
     return transaction || undefined;
+  }
+
+  // User addresses methods
+  async getUserAddresses(userId: number): Promise<UserAddress[]> {
+    return await db.select().from(userAddresses)
+      .where(eq(userAddresses.userId, userId))
+      .orderBy(desc(userAddresses.isDefault), desc(userAddresses.createdAt));
+  }
+
+  async getUserDefaultAddress(userId: number): Promise<UserAddress | undefined> {
+    const [address] = await db.select().from(userAddresses)
+      .where(and(eq(userAddresses.userId, userId), eq(userAddresses.isDefault, true)));
+    return address || undefined;
+  }
+
+  async createUserAddress(address: InsertUserAddress): Promise<UserAddress> {
+    const [newAddress] = await db.insert(userAddresses).values(address).returning();
+    return newAddress;
+  }
+
+  async updateUserAddress(id: number, updates: Partial<InsertUserAddress>): Promise<UserAddress | undefined> {
+    const [address] = await db.update(userAddresses)
+      .set({ 
+        ...updates,
+        updatedAt: new Date()
+      })
+      .where(eq(userAddresses.id, id))
+      .returning();
+    return address || undefined;
+  }
+
+  async deleteUserAddress(id: number): Promise<void> {
+    await db.delete(userAddresses).where(eq(userAddresses.id, id));
+  }
+
+  async setDefaultAddress(userId: number, addressId: number): Promise<void> {
+    // First, unset all other default addresses for this user
+    await db.update(userAddresses)
+      .set({ isDefault: false, updatedAt: new Date() })
+      .where(eq(userAddresses.userId, userId));
+    
+    // Then set the specified address as default
+    await db.update(userAddresses)
+      .set({ isDefault: true, updatedAt: new Date() })
+      .where(and(eq(userAddresses.id, addressId), eq(userAddresses.userId, userId)));
+  }
+
+  // User preferences methods
+  async getUserPreferences(userId: number): Promise<UserPreferences | undefined> {
+    const [preferences] = await db.select().from(userPreferences)
+      .where(eq(userPreferences.userId, userId));
+    return preferences || undefined;
+  }
+
+  async createUserPreferences(preferences: InsertUserPreferences): Promise<UserPreferences> {
+    const [newPreferences] = await db.insert(userPreferences).values(preferences).returning();
+    return newPreferences;
+  }
+
+  async updateUserPreferences(userId: number, updates: Partial<InsertUserPreferences>): Promise<UserPreferences | undefined> {
+    const [preferences] = await db.update(userPreferences)
+      .set({ 
+        ...updates,
+        updatedAt: new Date()
+      })
+      .where(eq(userPreferences.userId, userId))
+      .returning();
+    return preferences || undefined;
   }
 }
 

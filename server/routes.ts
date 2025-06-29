@@ -241,6 +241,209 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Account Settings Routes
+  
+  // Update user profile
+  app.put('/api/account/profile', requireAuth, async (req: AuthenticatedRequest, res) => {
+    try {
+      const { firstName, lastName, phone } = req.body;
+      const userId = req.user!.id;
+
+      const updatedUser = await storage.updateUserProfile(userId, {
+        firstName,
+        lastName,
+        phone,
+      });
+
+      if (!updatedUser) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      const { password, ...userWithoutPassword } = updatedUser;
+      res.json({ user: userWithoutPassword });
+    } catch (error) {
+      console.error('Update profile error:', error);
+      res.status(500).json({ error: 'Failed to update profile' });
+    }
+  });
+
+  // Change password
+  app.put('/api/account/password', requireAuth, async (req: AuthenticatedRequest, res) => {
+    try {
+      const { currentPassword, newPassword } = req.body;
+      const userId = req.user!.id;
+
+      // Verify current password
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      const isValidPassword = await AuthService.verifyPassword(currentPassword, user.password);
+      if (!isValidPassword) {
+        return res.status(400).json({ error: 'Current password is incorrect' });
+      }
+
+      // Hash new password
+      const hashedPassword = await AuthService.hashPassword(newPassword);
+      
+      // Update password
+      const updatedUser = await storage.updateUserProfile(userId, {
+        password: hashedPassword,
+      });
+
+      res.json({ message: 'Password updated successfully' });
+    } catch (error) {
+      console.error('Change password error:', error);
+      res.status(500).json({ error: 'Failed to change password' });
+    }
+  });
+
+  // Get user addresses
+  app.get('/api/account/addresses', requireAuth, async (req: AuthenticatedRequest, res) => {
+    try {
+      const userId = req.user!.id;
+      const addresses = await storage.getUserAddresses(userId);
+      res.json(addresses);
+    } catch (error) {
+      console.error('Get addresses error:', error);
+      res.status(500).json({ error: 'Failed to get addresses' });
+    }
+  });
+
+  // Create new address
+  app.post('/api/account/addresses', requireAuth, async (req: AuthenticatedRequest, res) => {
+    try {
+      const { street, city, state, postalCode, country, type, isDefault } = req.body;
+      const userId = req.user!.id;
+
+      const address = await storage.createUserAddress({
+        userId,
+        street,
+        city,
+        state,
+        postalCode,
+        country: country || 'South Africa',
+        type: type || 'shipping',
+        isDefault: isDefault || false,
+      });
+
+      // If this is set as default, ensure no other addresses are default
+      if (isDefault) {
+        await storage.setDefaultAddress(userId, address.id);
+      }
+
+      res.status(201).json(address);
+    } catch (error) {
+      console.error('Create address error:', error);
+      res.status(500).json({ error: 'Failed to create address' });
+    }
+  });
+
+  // Update address
+  app.put('/api/account/addresses/:id', requireAuth, async (req: AuthenticatedRequest, res) => {
+    try {
+      const addressId = parseInt(req.params.id);
+      const { street, city, state, postalCode, country, type, isDefault } = req.body;
+      const userId = req.user!.id;
+
+      const updatedAddress = await storage.updateUserAddress(addressId, {
+        street,
+        city,
+        state,
+        postalCode,
+        country,
+        type,
+        isDefault,
+      });
+
+      if (!updatedAddress) {
+        return res.status(404).json({ error: 'Address not found' });
+      }
+
+      // If this is set as default, ensure no other addresses are default
+      if (isDefault) {
+        await storage.setDefaultAddress(userId, addressId);
+      }
+
+      res.json(updatedAddress);
+    } catch (error) {
+      console.error('Update address error:', error);
+      res.status(500).json({ error: 'Failed to update address' });
+    }
+  });
+
+  // Delete address
+  app.delete('/api/account/addresses/:id', requireAuth, async (req: AuthenticatedRequest, res) => {
+    try {
+      const addressId = parseInt(req.params.id);
+      await storage.deleteUserAddress(addressId);
+      res.json({ message: 'Address deleted successfully' });
+    } catch (error) {
+      console.error('Delete address error:', error);
+      res.status(500).json({ error: 'Failed to delete address' });
+    }
+  });
+
+  // Get user preferences
+  app.get('/api/account/preferences', requireAuth, async (req: AuthenticatedRequest, res) => {
+    try {
+      const userId = req.user!.id;
+      let preferences = await storage.getUserPreferences(userId);
+
+      // Create default preferences if none exist
+      if (!preferences) {
+        preferences = await storage.createUserPreferences({
+          userId,
+          emailOrderUpdates: true,
+          emailMarketing: false,
+          emailSecurity: true,
+          smsNotifications: false,
+          currency: 'ZAR',
+          language: 'en',
+        });
+      }
+
+      res.json(preferences);
+    } catch (error) {
+      console.error('Get preferences error:', error);
+      res.status(500).json({ error: 'Failed to get preferences' });
+    }
+  });
+
+  // Update user preferences
+  app.put('/api/account/preferences', requireAuth, async (req: AuthenticatedRequest, res) => {
+    try {
+      const userId = req.user!.id;
+      const { 
+        emailOrderUpdates, 
+        emailMarketing, 
+        emailSecurity, 
+        smsNotifications, 
+        currency, 
+        language 
+      } = req.body;
+
+      const updatedPreferences = await storage.updateUserPreferences(userId, {
+        emailOrderUpdates,
+        emailMarketing,
+        emailSecurity,
+        smsNotifications,
+        currency,
+        language,
+      });
+
+      if (!updatedPreferences) {
+        return res.status(404).json({ error: 'Preferences not found' });
+      }
+
+      res.json(updatedPreferences);
+    } catch (error) {
+      console.error('Update preferences error:', error);
+      res.status(500).json({ error: 'Failed to update preferences' });
+    }
+  });
+
   // Get tenant information
   app.get('/api/storefront/tenant', async (req: TenantRequest, res) => {
     try {
