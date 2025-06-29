@@ -85,6 +85,25 @@ export function MyOrders() {
     },
   });
 
+  // Complete payment mutation
+  const completePaymentMutation = useMutation({
+    mutationFn: async (orderId: number) => {
+      return apiRequest(`/api/orders/${orderId}/complete-payment`, "POST");
+    },
+    onSuccess: (data: any) => {
+      // Redirect to payment page
+      window.open(data.paymentUrl, '_blank');
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/my-orders'] });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to initialize payment. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Filter and search orders
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
@@ -305,6 +324,17 @@ export function MyOrders() {
                             )}
                           </Button>
                         </CollapsibleTrigger>
+                        {order.status === 'pending' && (
+                          <Button 
+                            size="sm"
+                            onClick={() => completePaymentMutation.mutate(order.id)}
+                            disabled={completePaymentMutation.isPending}
+                            className="bg-primary-brand hover:bg-primary-brand/90"
+                          >
+                            <CreditCard className="h-4 w-4 mr-2" />
+                            {completePaymentMutation.isPending ? "Processing..." : "Complete Payment"}
+                          </Button>
+                        )}
                         <Button 
                           variant="outline" 
                           size="sm"

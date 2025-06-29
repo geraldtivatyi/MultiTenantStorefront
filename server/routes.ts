@@ -747,7 +747,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Tenant not found' });
       }
 
-      const sessionId = req.sessionID!;
+      const sessionId = req.sessionID || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
       // Get order items
       const orderItems = await storage.getOrderItems(orderId);
@@ -779,6 +779,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Reorder error:', error);
       res.status(500).json({ error: 'Failed to reorder items' });
+    }
+  });
+
+  // Complete payment for pending order
+  app.post('/api/orders/:orderId/complete-payment', requireAuth, async (req: TenantRequest, res) => {
+    try {
+      const orderId = parseInt(req.params.orderId);
+      if (!orderId) {
+        return res.status(400).json({ error: 'Invalid order ID' });
+      }
+
+      if (!req.tenant) {
+        return res.status(400).json({ error: 'Tenant not found' });
+      }
+
+      // Get the order
+      const order = await storage.getOrder(orderId);
+      if (!order) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+
+      if (order.status !== 'pending') {
+        return res.status(400).json({ error: 'Order is not pending payment' });
+      }
+
+      // Initialize Paystack transaction
+      const transactionData = {
+        amount: Math.round(parseFloat(order.total) * 100), // Convert to kobo
+        email: order.customerEmail,
+        currency: 'ZAR',
+        reference: `${order.orderNumber}_${Date.now()}`,
+        callback_url: `${req.protocol}://${req.get('host')}/orders/${orderId}/payment-success`,
+        metadata: {
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          customerName: order.customerName,
+        },
+      };
+
+      const paystackResponse = await paystackService.initializeTransaction(transactionData);
+      
+      if (!paystackResponse.status) {
+        throw new Error(paystackResponse.message || 'Failed to initialize payment');
+      }
+
+      res.json({
+        paymentUrl: paystackResponse.data.authorization_url,
+        reference: paystackResponse.data.reference,
+      });
+    } catch (error) {
+      console.error('Complete payment error:', error);
+      res.status(500).json({ error: 'Failed to initialize payment' });
     }
   });
 
