@@ -1,6 +1,7 @@
 import { 
   tenants, 
   users, 
+  userSessions,
   products, 
   cartItems, 
   orders, 
@@ -10,6 +11,8 @@ import {
   type InsertTenant,
   type User, 
   type InsertUser,
+  type UserSession,
+  type InsertUserSession,
   type Product,
   type InsertProduct,
   type CartItem,
@@ -22,13 +25,21 @@ import {
   type InsertPaymentTransaction
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, lt } from "drizzle-orm";
 
 export interface IStorage {
   // User management
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  updateUserLastLogin(id: number): Promise<void>;
+
+  // Session management
+  createUserSession(session: InsertUserSession): Promise<UserSession>;
+  getUserSession(sessionId: string): Promise<UserSession | undefined>;
+  deleteUserSession(sessionId: string): Promise<void>;
+  cleanupExpiredSessions(): Promise<void>;
 
   // Tenant management
   getTenant(id: number): Promise<Tenant | undefined>;
@@ -80,6 +91,40 @@ export class DatabaseStorage implements IStorage {
   async createUser(insertUser: InsertUser): Promise<User> {
     const [user] = await db.insert(users).values(insertUser).returning();
     return user;
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user || undefined;
+  }
+
+  async updateUserLastLogin(id: number): Promise<void> {
+    await db
+      .update(users)
+      .set({ 
+        lastLoginAt: new Date(),
+        updatedAt: new Date()
+      })
+      .where(eq(users.id, id));
+  }
+
+  // Session methods
+  async createUserSession(insertSession: InsertUserSession): Promise<UserSession> {
+    const [session] = await db.insert(userSessions).values(insertSession).returning();
+    return session;
+  }
+
+  async getUserSession(sessionId: string): Promise<UserSession | undefined> {
+    const [session] = await db.select().from(userSessions).where(eq(userSessions.id, sessionId));
+    return session || undefined;
+  }
+
+  async deleteUserSession(sessionId: string): Promise<void> {
+    await db.delete(userSessions).where(eq(userSessions.id, sessionId));
+  }
+
+  async cleanupExpiredSessions(): Promise<void> {
+    await db.delete(userSessions).where(lt(userSessions.expiresAt, new Date()));
   }
 
   // Tenant methods

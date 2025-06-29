@@ -4,15 +4,28 @@ import { storage } from "./storage";
 import { tenantMiddleware, adminBypass, type TenantRequest } from "./middleware/tenant";
 import { paystackService, type PaystackWebhookEvent } from "./services/paystack";
 import { 
+  AuthService, 
+  authMiddleware, 
+  requireAuth, 
+  requireAdmin, 
+  setSessionCookie, 
+  clearSessionCookie,
+  type AuthenticatedRequest 
+} from "./auth";
+import { 
   insertTenantSchema, 
   insertProductSchema, 
   insertCartItemSchema,
   insertOrderSchema,
-  insertOrderItemSchema
+  insertOrderItemSchema,
+  insertUserSchema
 } from "@shared/schema";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Apply authentication middleware to all routes
+  app.use(authMiddleware);
+  
   // Apply tenant middleware to all API routes except admin and webhooks
   app.use('/api/storefront', tenantMiddleware());
   app.use('/api/cart', tenantMiddleware());
@@ -20,6 +33,213 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Admin routes (no tenant middleware)
   app.use('/api/admin', adminBypass());
+
+  // Authentication routes
+  const loginSchema = z.object({
+    email: z.string().email(),
+    password: z.string().min(6),
+  });
+
+  const registerSchema = z.object({
+    username: z.string().min(3).max(50),
+    email: z.string().email(),
+    password: z.string().min(6),
+    firstName: z.string().max(50).optional(),
+    lastName: z.string().max(50).optional(),
+    phone: z.string().optional(),
+  });
+
+  // Register new user
+  app.post('/api/auth/register', async (req: AuthenticatedRequest, res) => {
+    try {
+      const data = registerSchema.parse(req.body);
+
+      // Check if user already exists
+      const existingUser = await storage.getUserByEmail(data.email);
+      if (existingUser) {
+        return res.status(400).json({ 
+          error: 'User already exists',
+          code: 'USER_EXISTS'
+        });
+      }
+
+      const existingUsername = await storage.getUserByUsername(data.username);
+      if (existingUsername) {
+        return res.status(400).json({ 
+          error: 'Username already taken',
+          code: 'USERNAME_TAKEN'
+        });
+      }
+
+      // Hash password
+      const hashedPassword = await AuthService.hashPassword(data.password);
+
+      // Create user
+      const user = await storage.createUser({
+        username: data.username,
+        email: data.email,
+        password: hashedPassword,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        phone: data.phone,
+        tenantId: null, // Users can be global or assigned to specific tenants
+        isAdmin: false,
+        emailVerified: false,
+        isActive: true,
+      });
+
+      // Create session
+      const sessionId = await AuthService.createSession(user.id);
+      setSessionCookie(res, sessionId);
+
+      // Return user without password
+      const { password, ...userWithoutPassword } = user;
+      res.status(201).json({ 
+        user: userWithoutPassword,
+        message: 'Registration successful'
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          error: 'Validation failed',
+          details: error.errors 
+        });
+      }
+      console.error('Registration error:', error);
+      res.status(500).json({ error: 'Registration failed' });
+    }
+  });
+
+  // Login user
+  app.post('/api/auth/login', async (req: AuthenticatedRequest, res) => {
+    try {
+      const data = loginSchema.parse(req.body);
+
+      // Find user
+      const user = await storage.getUserByEmail(data.email);
+      if (!user) {
+        return res.status(401).json({ 
+          error: 'Invalid credentials',
+          code: 'INVALID_CREDENTIALS'
+        });
+      }
+
+      if (!user.isActive) {
+        return res.status(401).json({ 
+          error: 'Account is disabled',
+          code: 'ACCOUNT_DISABLED'
+        });
+      }
+
+      // Verify password
+      const isValidPassword = await AuthService.verifyPassword(data.password, user.password);
+      if (!isValidPassword) {
+        return res.status(401).json({ 
+          error: 'Invalid credentials',
+          code: 'INVALID_CREDENTIALS'
+        });
+      }
+
+      // Create session
+      const sessionId = await AuthService.createSession(user.id);
+      setSessionCookie(res, sessionId);
+
+      // Return user without password
+      const { password, ...userWithoutPassword } = user;
+      res.json({ 
+        user: userWithoutPassword,
+        message: 'Login successful'
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          error: 'Validation failed',
+          details: error.errors 
+        });
+      }
+      console.error('Login error:', error);
+      res.status(500).json({ error: 'Login failed' });
+    }
+  });
+
+  // Logout user
+  app.post('/api/auth/logout', async (req: AuthenticatedRequest, res) => {
+    try {
+      if (req.sessionId) {
+        await AuthService.deleteSession(req.sessionId);
+      }
+      clearSessionCookie(res);
+      res.json({ message: 'Logout successful' });
+    } catch (error) {
+      console.error('Logout error:', error);
+      res.status(500).json({ error: 'Logout failed' });
+    }
+  });
+
+  // Get current user
+  app.get('/api/auth/user', requireAuth, async (req: AuthenticatedRequest, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: 'Not authenticated' });
+      }
+
+      // Return user without password
+      const { password, ...userWithoutPassword } = req.user;
+      res.json(userWithoutPassword);
+    } catch (error) {
+      console.error('Get user error:', error);
+      res.status(500).json({ error: 'Failed to get user' });
+    }
+  });
+
+  // Check authentication status
+  app.get('/api/auth/status', async (req: AuthenticatedRequest, res) => {
+    res.json({ 
+      authenticated: !!req.user,
+      user: req.user ? { 
+        id: req.user.id, 
+        username: req.user.username, 
+        email: req.user.email,
+        firstName: req.user.firstName,
+        lastName: req.user.lastName,
+        isAdmin: req.user.isAdmin
+      } : null 
+    });
+  });
+
+  // Create demo user (for testing - remove in production)
+  app.post('/api/auth/create-demo-user', async (req, res) => {
+    try {
+      // Check if demo user already exists
+      const existingUser = await storage.getUserByEmail('demo@creativecrafts.co.za');
+      if (existingUser) {
+        return res.json({ message: 'Demo user already exists' });
+      }
+
+      // Create demo user
+      const hashedPassword = await AuthService.hashPassword('demo123');
+      const user = await storage.createUser({
+        username: 'demo',
+        email: 'demo@creativecrafts.co.za',
+        password: hashedPassword,
+        firstName: 'Demo',
+        lastName: 'User',
+        phone: '+27 12 345 6789',
+        tenantId: null,
+        isAdmin: false,
+        emailVerified: true,
+        isActive: true,
+      });
+
+      res.json({ 
+        message: 'Demo user created successfully',
+        user: { id: user.id, email: user.email, username: user.username }
+      });
+    } catch (error) {
+      console.error('Create demo user error:', error);
+      res.status(500).json({ error: 'Failed to create demo user' });
+    }
+  });
 
   // Get tenant information
   app.get('/api/storefront/tenant', async (req: TenantRequest, res) => {

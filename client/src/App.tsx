@@ -16,6 +16,8 @@ import { PrivacyPolicy } from "@/pages/privacy-policy";
 import { TermsOfService } from "@/pages/terms-of-service";
 import { ShippingInfo } from "@/pages/shipping-info";
 import { Search } from "@/pages/search";
+import { Login } from "@/pages/login";
+import { Register } from "@/pages/register";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -34,6 +36,8 @@ function Router() {
       <Route path="/privacy-policy" component={PrivacyPolicy} />
       <Route path="/terms-of-service" component={TermsOfService} />
       <Route path="/shipping-info" component={ShippingInfo} />
+      <Route path="/login" component={Login} />
+      <Route path="/register" component={Register} />
       <Route component={NotFound} />
     </Switch>
   );
