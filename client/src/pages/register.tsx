@@ -51,9 +51,18 @@ export function Register() {
   const registerMutation = useMutation({
     mutationFn: async (data: RegisterFormData) => {
       const { confirmPassword, ...submitData } = data;
-      return apiRequest("/api/auth/register", "POST", submitData);
+      console.log('Sending registration data:', submitData);
+      try {
+        const result = await apiRequest("/api/auth/register", "POST", submitData);
+        console.log('Registration result:', result);
+        return result;
+      } catch (error) {
+        console.error('Registration API error:', error);
+        throw error;
+      }
     },
     onSuccess: (data) => {
+      console.log('Registration successful:', data);
       toast({
         title: "Welcome to " + (tenant?.name || "our store") + "!",
         description: "Your account has been created successfully.",
@@ -64,6 +73,7 @@ export function Register() {
       window.location.reload();
     },
     onError: (error: any) => {
+      console.error('Registration error in onError:', error);
       let message = "Registration failed. Please try again.";
       
       if (error.message.includes("USER_EXISTS")) {
