@@ -41,7 +41,7 @@ export function Header() {
                 Home
               </Link>
               <Link 
-                href="/products" 
+                href="/search" 
                 className="text-gray-600 hover:text-primary-brand px-3 py-2 rounded-md text-sm font-medium transition-colors"
               >
                 Products

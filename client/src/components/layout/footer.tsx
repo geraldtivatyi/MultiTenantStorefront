@@ -1,3 +1,4 @@
+import { Link } from "wouter";
 import { useTenant } from "@/hooks/use-tenant";
 
 export function Footer() {
@@ -17,20 +18,20 @@ export function Footer() {
           <div>
             <h4 className="font-semibold mb-4">Quick Links</h4>
             <ul className="space-y-2 text-gray-400">
-              <li><a href="#" className="hover:text-white transition-colors">About Us</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">Contact</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">FAQ</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">Support</a></li>
+              <li><Link href="/about" className="hover:text-white transition-colors">About Us</Link></li>
+              <li><Link href="/contact" className="hover:text-white transition-colors">Contact</Link></li>
+              <li><Link href="/shipping-info" className="hover:text-white transition-colors">Shipping Info</Link></li>
+              <li><Link href="/search" className="hover:text-white transition-colors">Search Products</Link></li>
             </ul>
           </div>
           
           <div>
-            <h4 className="font-semibold mb-4">Categories</h4>
+            <h4 className="font-semibold mb-4">Shop</h4>
             <ul className="space-y-2 text-gray-400">
-              <li><a href="#" className="hover:text-white transition-colors">Laptops</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">Smartphones</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">Accessories</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">Wearables</a></li>
+              <li><Link href="/search?category=Art Supplies" className="hover:text-white transition-colors">Art Supplies</Link></li>
+              <li><Link href="/search?category=Craft Tools" className="hover:text-white transition-colors">Craft Tools</Link></li>
+              <li><Link href="/search?category=Paint & Brushes" className="hover:text-white transition-colors">Paint & Brushes</Link></li>
+              <li><Link href="/search?category=Paper & Canvas" className="hover:text-white transition-colors">Paper & Canvas</Link></li>
             </ul>
           </div>
           
@@ -59,8 +60,18 @@ export function Footer() {
           </div>
         </div>
         
-        <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
-          <p>&copy; 2024 {tenant?.name || "Store"}. All rights reserved. Powered by Multi-Tenant Platform</p>
+        <div className="border-t border-gray-800 mt-8 pt-8">
+          <div className="flex flex-col md:flex-row justify-between items-center text-gray-400">
+            <p>&copy; 2024 {tenant?.name || "Store"}. All rights reserved.</p>
+            <div className="flex space-x-4 mt-4 md:mt-0">
+              <Link href="/privacy-policy" className="hover:text-white transition-colors text-sm">
+                Privacy Policy
+              </Link>
+              <Link href="/terms-of-service" className="hover:text-white transition-colors text-sm">
+                Terms of Service
+              </Link>
+            </div>
+          </div>
         </div>
       </div>
     </footer>
