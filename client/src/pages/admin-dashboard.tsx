@@ -77,6 +77,11 @@ export function AdminDashboard() {
     enabled: activeTab === "payments",
   });
 
+  const { data: payments = [], isLoading: paymentsLoading } = useQuery({
+    queryKey: ["/api/admin/payments"],
+    enabled: activeTab === "payments",
+  });
+
   // Fetch dashboard stats
   const { data: dashboardStats } = useQuery({
     queryKey: ["/api/admin/stats"],
@@ -858,7 +863,7 @@ export function AdminDashboard() {
                     <CardTitle>Recent Transactions</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    {ordersLoading ? (
+                    {paymentsLoading ? (
                       <div className="space-y-4">
                         {Array.from({ length: 5 }).map((_, i) => (
                           <div key={i} className="flex items-center space-x-4 p-4 border border-gray-200 rounded-lg">
@@ -871,40 +876,29 @@ export function AdminDashboard() {
                           </div>
                         ))}
                       </div>
-                    ) : orders?.length === 0 ? (
-                      <p className="text-muted-foreground text-center py-8">No transactions found.</p>
+                    ) : !payments || payments.length === 0 ? (
+                      <p className="text-muted-foreground text-center py-8">No payment transactions found.</p>
                     ) : (
                       <div className="space-y-4">
-                        {orders?.slice(0, 10).map((order: any) => (
-                          <div key={order.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                        {payments.slice(0, 10).map((payment: any) => (
+                          <div key={payment.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
                             <div className="flex items-center space-x-4">
-                              <div className={`p-2 rounded-full ${
-                                order.status === 'paid' ? 'bg-secondary-brand/10' :
-                                order.status === 'pending' ? 'bg-yellow-100' :
-                                'bg-red-100'
-                              }`}>
-                                {order.status === 'paid' ? (
-                                  <CheckCircle className={`h-4 w-4 text-secondary-brand`} />
-                                ) : order.status === 'pending' ? (
-                                  <Clock className="h-4 w-4 text-yellow-600" />
-                                ) : (
-                                  <XCircle className="h-4 w-4 text-red-600" />
-                                )}
+                              <div className="p-2 rounded-full bg-secondary-brand/10">
+                                <CheckCircle className="h-4 w-4 text-secondary-brand" />
                               </div>
                               <div>
-                                <p className="font-medium">Order #{order.orderNumber}</p>
-                                <p className="text-sm text-muted-foreground">{order.customerEmail}</p>
+                                <p className="font-medium">Order #{payment.orderNumber}</p>
+                                <p className="text-sm text-muted-foreground">
+                                  {payment.customerEmail} • {payment.tenantName}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {payment.createdAt ? new Date(payment.createdAt).toLocaleDateString() : 'Date unavailable'}
+                                </p>
                               </div>
                             </div>
                             <div className="text-right">
-                              <p className="font-medium">{formatPrice(parseFloat(order.total))}</p>
-                              <Badge variant={
-                                order.status === 'paid' ? 'default' :
-                                order.status === 'pending' ? 'secondary' :
-                                'destructive'
-                              }>
-                                {order.status}
-                              </Badge>
+                              <p className="font-medium">{formatPrice(parseFloat(payment.total))}</p>
+                              <Badge variant="default">Paid</Badge>
                             </div>
                           </div>
                         ))}

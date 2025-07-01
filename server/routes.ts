@@ -923,12 +923,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get all orders across tenants (admin)
   app.get('/api/admin/orders', async (req, res) => {
     try {
-      const orders = await storage.getOrdersByTenant(1); // For now, get orders from first tenant
-      // In a real implementation, you'd get orders from all tenants
-      res.json(orders);
+      // Get orders from all tenants by fetching all tenants first
+      const tenants = await storage.getAllTenants();
+      const allOrders = [];
+      
+      for (const tenant of tenants) {
+        const tenantOrders = await storage.getOrdersByTenant(tenant.id);
+        // Add tenant info to each order for admin display
+        const ordersWithTenant = tenantOrders.map(order => ({
+          ...order,
+          tenantName: tenant.name,
+          tenantSubdomain: tenant.subdomain
+        }));
+        allOrders.push(...ordersWithTenant);
+      }
+      
+      // Sort by creation date (newest first)
+      allOrders.sort((a, b) => {
+        if (!a.createdAt && !b.createdAt) return 0;
+        if (!a.createdAt) return 1;
+        if (!b.createdAt) return -1;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      });
+      
+      res.json(allOrders);
     } catch (error) {
       console.error('Get admin orders error:', error);
       res.status(500).json({ error: 'Failed to get orders' });
+    }
+  });
+
+  // Get payment transactions (admin)
+  app.get('/api/admin/payments', async (req, res) => {
+    try {
+      // For now, we'll use orders as payment data since they contain payment info
+      const tenants = await storage.getAllTenants();
+      const allOrders = [];
+      
+      for (const tenant of tenants) {
+        const tenantOrders = await storage.getOrdersByTenant(tenant.id);
+        const ordersWithTenant = tenantOrders.map(order => ({
+          ...order,
+          tenantName: tenant.name,
+          tenantSubdomain: tenant.subdomain
+        }));
+        allOrders.push(...ordersWithTenant);
+      }
+      
+      // Filter to only paid orders for payment transactions
+      const paidOrders = allOrders.filter(order => order.status === 'paid');
+      
+      // Sort by creation date (newest first)
+      paidOrders.sort((a, b) => {
+        if (!a.createdAt && !b.createdAt) return 0;
+        if (!a.createdAt) return 1;
+        if (!b.createdAt) return -1;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      });
+      
+      res.json(paidOrders);
+    } catch (error) {
+      console.error('Get admin payments error:', error);
+      res.status(500).json({ error: 'Failed to get payment transactions' });
     }
   });
 
