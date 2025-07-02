@@ -93,6 +93,12 @@ export function AdminDashboard() {
     enabled: activeTab === "dashboard",
   });
 
+  // Fetch payment stats for dashboard payment overview
+  const { data: dashboardPaymentStats = {} } = useQuery({
+    queryKey: ["/api/admin/payment-stats"],
+    enabled: activeTab === "dashboard",
+  });
+
   // Use real stats from API or fallback to calculated stats
   const stats = {
     totalTenants: dashboardStats?.totalTenants || tenants.length,
@@ -312,9 +318,8 @@ export function AdminDashboard() {
                         </div>
                       </div>
                       <div className="mt-4">
-                        <span className="text-secondary-brand text-sm font-medium flex items-center">
-                          <TrendingUp className="h-3 w-3 mr-1" />
-                          +12% from last month
+                        <span className="text-muted-foreground text-sm">
+                          Active store instances
                         </span>
                       </div>
                     </CardContent>
@@ -332,9 +337,8 @@ export function AdminDashboard() {
                         </div>
                       </div>
                       <div className="mt-4">
-                        <span className="text-secondary-brand text-sm font-medium flex items-center">
-                          <TrendingUp className="h-3 w-3 mr-1" />
-                          +8% from last month
+                        <span className="text-muted-foreground text-sm">
+                          From completed payments
                         </span>
                       </div>
                     </CardContent>
@@ -352,9 +356,8 @@ export function AdminDashboard() {
                         </div>
                       </div>
                       <div className="mt-4">
-                        <span className="text-secondary-brand text-sm font-medium flex items-center">
-                          <TrendingUp className="h-3 w-3 mr-1" />
-                          +15% from last month
+                        <span className="text-muted-foreground text-sm">
+                          Across all tenant stores
                         </span>
                       </div>
                     </CardContent>
@@ -372,9 +375,8 @@ export function AdminDashboard() {
                         </div>
                       </div>
                       <div className="mt-4">
-                        <span className="text-secondary-brand text-sm font-medium flex items-center">
-                          <TrendingUp className="h-3 w-3 mr-1" />
-                          +22% from last month
+                        <span className="text-muted-foreground text-sm">
+                          Logged in users
                         </span>
                       </div>
                     </CardContent>
@@ -451,44 +453,56 @@ export function AdminDashboard() {
                             </div>
                             <div>
                               <p className="font-medium">Successful Payments</p>
-                              <p className="text-sm text-muted-foreground">Last 30 days</p>
+                              <p className="text-sm text-muted-foreground">Total completed</p>
                             </div>
                           </div>
                           <div className="text-right">
-                            <p className="text-xl font-bold text-secondary-brand">12,847</p>
-                            <p className="text-sm text-muted-foreground">98.2%</p>
+                            <p className="text-xl font-bold text-secondary-brand">
+                              {(dashboardPaymentStats as any)?.totalTransactions || "0"}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              {(dashboardPaymentStats as any)?.successRate || "0.0"}%
+                            </p>
                           </div>
                         </div>
 
                         <div className="flex items-center justify-between">
                           <div className="flex items-center space-x-3">
-                            <div className="bg-error-brand/10 rounded-full p-2">
-                              <XCircle className="text-error-brand h-4 w-4" />
+                            <div className="bg-yellow-500/10 rounded-full p-2">
+                              <Clock className="text-yellow-600 h-4 w-4" />
                             </div>
                             <div>
-                              <p className="font-medium">Failed Payments</p>
-                              <p className="text-sm text-muted-foreground">Last 30 days</p>
+                              <p className="font-medium">Pending Payments</p>
+                              <p className="text-sm text-muted-foreground">Awaiting completion</p>
                             </div>
                           </div>
                           <div className="text-right">
-                            <p className="text-xl font-bold text-error-brand">234</p>
-                            <p className="text-sm text-muted-foreground">1.8%</p>
+                            <p className="text-xl font-bold text-yellow-600">
+                              {(dashboardPaymentStats as any)?.pendingPayments || "0"}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              {(dashboardPaymentStats as any)?.pendingRevenue || "R 0.00"}
+                            </p>
                           </div>
                         </div>
 
                         <div className="flex items-center justify-between">
                           <div className="flex items-center space-x-3">
                             <div className="bg-accent-brand/10 rounded-full p-2">
-                              <Clock className="text-accent-brand h-4 w-4" />
+                              <CreditCard className="text-accent-brand h-4 w-4" />
                             </div>
                             <div>
-                              <p className="font-medium">Pending Payouts</p>
-                              <p className="text-sm text-muted-foreground">To tenants</p>
+                              <p className="font-medium">Total Revenue</p>
+                              <p className="text-sm text-muted-foreground">All transactions</p>
                             </div>
                           </div>
                           <div className="text-right">
-                            <p className="text-xl font-bold text-accent-brand">₦45,230</p>
-                            <p className="text-sm text-muted-foreground">23 tenants</p>
+                            <p className="text-xl font-bold text-accent-brand">
+                              {(dashboardPaymentStats as any)?.totalRevenue || "R 0.00"}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              From {stats.totalTenants} tenant{stats.totalTenants !== 1 ? 's' : ''}
+                            </p>
                           </div>
                         </div>
                       </div>
