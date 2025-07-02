@@ -82,6 +82,11 @@ export function AdminDashboard() {
     enabled: activeTab === "payments",
   });
 
+  const { data: paymentStats = {}, isLoading: paymentStatsLoading } = useQuery({
+    queryKey: ["/api/admin/payment-stats"],
+    enabled: activeTab === "payments",
+  });
+
   // Fetch dashboard stats
   const { data: dashboardStats } = useQuery({
     queryKey: ["/api/admin/stats"],
@@ -815,7 +820,7 @@ export function AdminDashboard() {
             {activeTab === "payments" && (
               <div className="space-y-6">
                 {/* Payment Overview Stats */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                   <Card>
                     <CardContent className="p-6">
                       <div className="flex items-center">
@@ -824,7 +829,9 @@ export function AdminDashboard() {
                         </div>
                         <div className="ml-4">
                           <p className="text-sm font-medium text-muted-foreground">Total Revenue</p>
-                          <p className="text-2xl font-bold text-foreground">{stats.totalRevenue}</p>
+                          <p className="text-2xl font-bold text-foreground">
+                            {paymentStatsLoading ? "Loading..." : paymentStats.totalRevenue || "R 0.00"}
+                          </p>
                         </div>
                       </div>
                     </CardContent>
@@ -836,8 +843,25 @@ export function AdminDashboard() {
                           <BarChart3 className="text-accent-brand h-6 w-6" />
                         </div>
                         <div className="ml-4">
-                          <p className="text-sm font-medium text-muted-foreground">Total Orders</p>
-                          <p className="text-2xl font-bold text-foreground">{stats.totalOrders}</p>
+                          <p className="text-sm font-medium text-muted-foreground">Successful Payments</p>
+                          <p className="text-2xl font-bold text-foreground">
+                            {paymentStatsLoading ? "Loading..." : paymentStats.totalTransactions || "0"}
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-6">
+                      <div className="flex items-center">
+                        <div className="bg-yellow-500/10 rounded-full p-3">
+                          <Clock className="text-yellow-600 h-6 w-6" />
+                        </div>
+                        <div className="ml-4">
+                          <p className="text-sm font-medium text-muted-foreground">Pending Payments</p>
+                          <p className="text-2xl font-bold text-foreground">
+                            {paymentStatsLoading ? "Loading..." : paymentStats.pendingPayments || "0"}
+                          </p>
                         </div>
                       </div>
                     </CardContent>
@@ -846,11 +870,13 @@ export function AdminDashboard() {
                     <CardContent className="p-6">
                       <div className="flex items-center">
                         <div className="bg-primary-brand/10 rounded-full p-3">
-                          <Users className="text-primary-brand h-6 w-6" />
+                          <TrendingUp className="text-primary-brand h-6 w-6" />
                         </div>
                         <div className="ml-4">
-                          <p className="text-sm font-medium text-muted-foreground">Paid Orders</p>
-                          <p className="text-2xl font-bold text-foreground">{stats.activeUsers}</p>
+                          <p className="text-sm font-medium text-muted-foreground">Success Rate</p>
+                          <p className="text-2xl font-bold text-foreground">
+                            {paymentStatsLoading ? "Loading..." : `${paymentStats.successRate || "0.0"}%`}
+                          </p>
                         </div>
                       </div>
                     </CardContent>

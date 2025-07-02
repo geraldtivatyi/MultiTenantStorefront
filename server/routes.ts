@@ -899,18 +899,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/admin/stats', async (req, res) => {
     try {
       const tenants = await storage.getAllTenants();
-      const orders = await storage.getOrdersByTenant(1); // Get all orders for stats
+      
+      // Get all orders from all tenants
+      const allOrders = [];
+      for (const tenant of tenants) {
+        const tenantOrders = await storage.getOrdersByTenant(tenant.id);
+        allOrders.push(...tenantOrders);
+      }
 
-      // Calculate total revenue from orders
-      const totalRevenue = orders.reduce((sum, order) => {
+      // Calculate stats from all tenants
+      const paidOrders = allOrders.filter(order => order.status === 'paid');
+      const totalRevenue = paidOrders.reduce((sum, order) => {
         return sum + parseFloat(order.total);
       }, 0);
 
       const stats = {
         totalTenants: tenants.length,
         totalRevenue: `R ${totalRevenue.toFixed(2)}`,
-        totalOrders: orders.length,
-        activeUsers: orders.filter(order => order.status === 'paid').length, // Active users who made payments
+        totalOrders: allOrders.length,
+        activeUsers: paidOrders.length, // Number of completed payments
       };
 
       res.json(stats);
@@ -985,6 +992,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Get admin payments error:', error);
       res.status(500).json({ error: 'Failed to get payment transactions' });
+    }
+  });
+
+  // Get payment statistics (admin)
+  app.get('/api/admin/payment-stats', async (req, res) => {
+    try {
+      const tenants = await storage.getAllTenants();
+      
+      // Get all orders from all tenants
+      const allOrders = [];
+      for (const tenant of tenants) {
+        const tenantOrders = await storage.getOrdersByTenant(tenant.id);
+        allOrders.push(...tenantOrders);
+      }
+
+      // Calculate payment-specific stats
+      const paidOrders = allOrders.filter(order => order.status === 'paid');
+      const pendingOrders = allOrders.filter(order => order.status === 'pending');
+      const failedOrders = allOrders.filter(order => order.status === 'failed');
+      
+      const totalRevenue = paidOrders.reduce((sum, order) => {
+        return sum + parseFloat(order.total);
+      }, 0);
+
+      const pendingRevenue = pendingOrders.reduce((sum, order) => {
+        return sum + parseFloat(order.total);
+      }, 0);
+
+      // Calculate today's revenue
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todaysPaidOrders = paidOrders.filter(order => {
+        const orderDate = new Date(order.createdAt || new Date());
+        orderDate.setHours(0, 0, 0, 0);
+        return orderDate.getTime() === today.getTime();
+      });
+      
+      const todaysRevenue = todaysPaidOrders.reduce((sum, order) => {
+        return sum + parseFloat(order.total);
+      }, 0);
+
+      const paymentStats = {
+        totalRevenue: `R ${totalRevenue.toFixed(2)}`,
+        totalTransactions: paidOrders.length,
+        pendingPayments: pendingOrders.length,
+        pendingRevenue: `R ${pendingRevenue.toFixed(2)}`,
+        todaysRevenue: `R ${todaysRevenue.toFixed(2)}`,
+        failedPayments: failedOrders.length,
+        successRate: allOrders.length > 0 ? ((paidOrders.length / allOrders.length) * 100).toFixed(1) : '0.0',
+      };
+
+      res.json(paymentStats);
+    } catch (error) {
+      console.error('Get payment stats error:', error);
+      res.status(500).json({ error: 'Failed to get payment statistics' });
     }
   });
 
