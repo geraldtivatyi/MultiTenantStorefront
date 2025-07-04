@@ -25,55 +25,56 @@ export function Cart() {
     <div className="min-h-screen bg-background">
       <Header />
       
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex items-center justify-between mb-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 sm:mb-8 gap-4">
           <Link href="/">
-            <Button variant="ghost" className="text-primary-brand hover:text-primary-brand/80">
+            <Button variant="ghost" className="text-primary-brand hover:text-primary-brand/80 self-start">
               <ArrowLeft className="h-4 w-4 mr-2" />
-              Continue Shopping
+              <span className="hidden sm:inline">Continue Shopping</span>
+              <span className="sm:hidden">Back</span>
             </Button>
           </Link>
-          <h1 className="text-2xl font-bold text-foreground">Shopping Cart</h1>
-          <div className="w-32"></div>
+          <h1 className="text-xl sm:text-2xl font-bold text-foreground text-center sm:text-left">Shopping Cart</h1>
+          <div className="hidden sm:block w-32"></div>
         </div>
 
         {isLoading ? (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="flex flex-col lg:grid lg:grid-cols-3 gap-6 lg:gap-8">
             <div className="lg:col-span-2 space-y-4">
               {Array.from({ length: 3 }).map((_, i) => (
                 <Card key={i}>
-                  <CardContent className="p-6">
-                    <div className="flex items-center space-x-4">
-                      <Skeleton className="h-20 w-20" />
-                      <div className="flex-1 space-y-2">
-                        <Skeleton className="h-6 w-3/4" />
-                        <Skeleton className="h-4 w-1/2" />
-                        <Skeleton className="h-8 w-1/4" />
+                  <CardContent className="p-4 sm:p-6">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-4 sm:space-y-0 sm:space-x-4">
+                      <Skeleton className="h-16 w-16 sm:h-20 sm:w-20 flex-shrink-0" />
+                      <div className="flex-1 space-y-2 w-full">
+                        <Skeleton className="h-5 sm:h-6 w-3/4" />
+                        <Skeleton className="h-3 sm:h-4 w-1/2" />
+                        <Skeleton className="h-7 sm:h-8 w-1/4" />
                       </div>
-                      <Skeleton className="h-6 w-20" />
+                      <Skeleton className="h-5 sm:h-6 w-16 sm:w-20" />
                     </div>
                   </CardContent>
                 </Card>
               ))}
             </div>
-            <div>
+            <div className="order-first lg:order-last">
               <Card>
-                <CardContent className="p-6">
+                <CardContent className="p-4 sm:p-6">
                   <div className="space-y-4">
-                    <Skeleton className="h-6 w-full" />
-                    <Skeleton className="h-4 w-3/4" />
-                    <Skeleton className="h-4 w-3/4" />
-                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-5 sm:h-6 w-full" />
+                    <Skeleton className="h-3 sm:h-4 w-3/4" />
+                    <Skeleton className="h-3 sm:h-4 w-3/4" />
+                    <Skeleton className="h-10 sm:h-12 w-full" />
                   </div>
                 </CardContent>
               </Card>
             </div>
           </div>
         ) : cartItems.length === 0 ? (
-          <div className="text-center py-16">
-            <ShoppingBag className="h-24 w-24 text-muted-foreground mx-auto mb-4" />
-            <h2 className="text-2xl font-semibold text-foreground mb-2">Your cart is empty</h2>
-            <p className="text-muted-foreground mb-8">Add some products to get started!</p>
+          <div className="text-center py-12 sm:py-16">
+            <ShoppingBag className="h-16 w-16 sm:h-24 sm:w-24 text-muted-foreground mx-auto mb-4" />
+            <h2 className="text-xl sm:text-2xl font-semibold text-foreground mb-2">Your cart is empty</h2>
+            <p className="text-muted-foreground mb-6 sm:mb-8 px-4">Add some products to get started!</p>
             <Link href="/">
               <Button className="bg-primary-brand text-white hover:bg-primary-brand/90">
                 Start Shopping
@@ -81,10 +82,10 @@ export function Cart() {
             </Link>
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="flex flex-col lg:grid lg:grid-cols-3 gap-6 lg:gap-8">
             {/* Cart Items */}
-            <div className="lg:col-span-2">
-              <h2 className="text-xl font-bold mb-6">Your Items ({cartItems.length})</h2>
+            <div className="lg:col-span-2 order-last lg:order-first">
+              <h2 className="text-lg sm:text-xl font-bold mb-4 sm:mb-6">Your Items ({cartItems.length})</h2>
               <div className="space-y-4">
                 {cartItems.map((item) => (
                   <CartItemComponent key={item.id} item={item} />
@@ -93,8 +94,8 @@ export function Cart() {
             </div>
 
             {/* Order Summary */}
-            <div className="lg:col-span-1">
-              <Card className="sticky top-8">
+            <div className="lg:col-span-1 order-first lg:order-last">
+              <Card className="lg:sticky lg:top-8">
                 <CardHeader>
                   <CardTitle>Order Summary</CardTitle>
                 </CardHeader>

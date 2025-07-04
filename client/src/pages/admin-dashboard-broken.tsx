@@ -1,0 +1,1179 @@
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
+import { formatPrice } from "@/lib/utils";
+import { 
+  BarChart3, 
+  Store, 
+  Users, 
+  CreditCard, 
+  Settings, 
+  Plus, 
+  ExternalLink,
+  AlertCircle,
+  CheckCircle,
+  Clock,
+  XCircle,
+  Shield,
+  TrendingUp,
+  Menu,
+  X
+} from "lucide-react";
+import type { Tenant, Product } from "@shared/schema";
+
+// Form schemas
+const tenantSchema = z.object({
+  name: z.string().min(1, "Store name is required"),
+  subdomain: z.string().min(1, "Subdomain is required").regex(/^[a-z0-9-]+$/, "Subdomain can only contain lowercase letters, numbers, and hyphens"),
+  ownerEmail: z.string().email("Please enter a valid email address"),
+  heroTitle: z.string().optional(),
+  heroSubtitle: z.string().optional(),
+});
+
+const productSchema = z.object({
+  tenantId: z.number(),
+  name: z.string().min(1, "Product name is required"),
+  description: z.string().min(1, "Description is required"),
+  longDescription: z.string().optional(),
+  price: z.string().min(1, "Price is required"),
+  imageUrl: z.string().url("Please enter a valid image URL").optional().or(z.literal("")),
+  category: z.string().optional(),
+  stock: z.number().min(0, "Stock cannot be negative").optional(),
+});
+
+type TenantFormData = z.infer<typeof tenantSchema>;
+type ProductFormData = z.infer<typeof productSchema>;
+
+export function AdminDashboard() {
+  const [activeTab, setActiveTab] = useState<"dashboard" | "tenants" | "products" | "payments" | "settings">("dashboard");
+  const [selectedTenant, setSelectedTenant] = useState<number | null>(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  // Fetch tenants
+  const { data: tenants = [], isLoading: tenantsLoading, error: tenantsError } = useQuery<Tenant[]>({
+    queryKey: ["/api/admin/tenants"],
+  });
+
+  // Fetch products for selected tenant
+  const { data: products = [], isLoading: productsLoading } = useQuery<Product[]>({
+    queryKey: ["/api/admin/products", selectedTenant],
+    enabled: selectedTenant !== null && activeTab === "products",
+  });
+
+  // Fetch orders for payments section
+  const { data: orders = [], isLoading: ordersLoading } = useQuery({
+    queryKey: ["/api/admin/orders"],
+    enabled: activeTab === "payments",
+  });
+
+  const { data: payments = [], isLoading: paymentsLoading } = useQuery({
+    queryKey: ["/api/admin/payments"],
+    enabled: activeTab === "payments",
+  });
+
+  const { data: paymentStats = {}, isLoading: paymentStatsLoading } = useQuery({
+    queryKey: ["/api/admin/payment-stats"],
+    enabled: activeTab === "payments",
+  });
+
+  // Fetch dashboard stats
+  const { data: dashboardStats } = useQuery({
+    queryKey: ["/api/admin/stats"],
+    enabled: activeTab === "dashboard",
+  });
+
+  // Fetch payment stats for dashboard payment overview
+  const { data: dashboardPaymentStats = {} } = useQuery({
+    queryKey: ["/api/admin/payment-stats"],
+    enabled: activeTab === "dashboard",
+  });
+
+  // Use real stats from API or fallback to calculated stats
+  const stats = {
+    totalTenants: dashboardStats?.totalTenants || tenants.length,
+    totalRevenue: dashboardStats?.totalRevenue || "R 0.00",
+    totalOrders: dashboardStats?.totalOrders || 0,
+    activeUsers: dashboardStats?.activeUsers || 0,
+  };
+
+  // Forms
+  const tenantForm = useForm<TenantFormData>({
+    resolver: zodResolver(tenantSchema),
+    defaultValues: {
+      name: "",
+      subdomain: "",
+      ownerEmail: "",
+      heroTitle: "",
+      heroSubtitle: "",
+    },
+  });
+
+  const productForm = useForm<ProductFormData>({
+    resolver: zodResolver(productSchema),
+    defaultValues: {
+      tenantId: selectedTenant || 0,
+      name: "",
+      description: "",
+      longDescription: "",
+      price: "",
+      imageUrl: "",
+      category: "",
+      stock: 0,
+    },
+  });
+
+  // Mutations
+  const createTenantMutation = useMutation({
+    mutationFn: async (data: TenantFormData) => {
+      const response = await apiRequest("/api/admin/tenants", "POST", data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/tenants"] });
+      tenantForm.reset();
+      toast({
+        title: "Tenant created",
+        description: "New tenant has been created successfully.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: "Failed to create tenant. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const createProductMutation = useMutation({
+    mutationFn: async (data: ProductFormData) => {
+      const response = await apiRequest("/api/admin/products", "POST", data);
+      return response.json();
+    },
+    onSuccess: () => {
+      productForm.reset();
+      toast({
+        title: "Product created",
+        description: "New product has been created successfully.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: "Failed to create product. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const onCreateTenant = (data: TenantFormData) => {
+    createTenantMutation.mutate(data);
+  };
+
+  const onCreateProduct = (data: ProductFormData) => {
+    if (!selectedTenant) {
+      toast({
+        title: "Error",
+        description: "Please select a tenant first.",
+        variant: "destructive",
+      });
+      return;
+    }
+    createProductMutation.mutate({ ...data, tenantId: selectedTenant });
+  };
+
+  const handleTabChange = (tab: typeof activeTab) => {
+    setActiveTab(tab);
+    setIsMobileMenuOpen(false);
+  };
+
+  const sidebarContent = (
+    <>
+      <div className="p-4 lg:p-6 border-b border-gray-200">
+        <h1 className="text-lg lg:text-xl font-bold text-primary-brand">Platform Admin</h1>
+        <p className="text-xs lg:text-sm text-muted-foreground">Multi-Tenant Dashboard</p>
+      </div>
+      <nav className="mt-4 lg:mt-6">
+        <div className="space-y-1 px-3">
+          <button
+            onClick={() => handleTabChange("dashboard")}
+            className={`w-full text-left flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors ${
+              activeTab === "dashboard"
+                ? "bg-primary-brand text-white"
+                : "text-muted-foreground hover:bg-gray-100"
+            }`}
+          >
+            <BarChart3 className="mr-3 h-4 w-4" />
+            Dashboard
+          </button>
+          <button
+            onClick={() => handleTabChange("tenants")}
+            className={`w-full text-left flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors ${
+              activeTab === "tenants"
+                ? "bg-primary-brand text-white"
+                : "text-muted-foreground hover:bg-gray-100"
+            }`}
+          >
+            <Store className="mr-3 h-4 w-4" />
+            Tenant Stores
+          </button>
+          <button
+            onClick={() => handleTabChange("products")}
+            className={`w-full text-left flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors ${
+              activeTab === "products"
+                ? "bg-primary-brand text-white"
+                : "text-muted-foreground hover:bg-gray-100"
+            }`}
+          >
+            <Users className="mr-3 h-4 w-4" />
+            Products
+          </button>
+          <button
+            onClick={() => handleTabChange("payments")}
+            className={`w-full text-left flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors ${
+              activeTab === "payments"
+                ? "bg-primary-brand text-white"
+                : "text-muted-foreground hover:bg-gray-100"
+            }`}
+          >
+            <CreditCard className="mr-3 h-4 w-4" />
+            Payments
+          </button>
+          <button
+            onClick={() => handleTabChange("settings")}
+            className={`w-full text-left flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors ${
+              activeTab === "settings"
+                ? "bg-primary-brand text-white"
+                : "text-muted-foreground hover:bg-gray-100"
+            }`}
+          >
+            <Settings className="mr-3 h-4 w-4" />
+            Platform Settings
+          </button>
+        </div>
+      </nav>
+    </>
+  );
+
+  return (
+    <div className="min-h-screen bg-background">
+      {/* Mobile Header */}
+      <div className="lg:hidden bg-white shadow-sm border-b border-gray-200 px-4 py-3 flex items-center justify-between">
+        <h1 className="text-lg font-bold text-primary-brand">Admin Dashboard</h1>
+        <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
+          <SheetTrigger asChild>
+            <Button variant="ghost" size="icon">
+              <Menu className="h-5 w-5" />
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="left" className="w-64">
+            <SheetHeader>
+              <SheetTitle className="text-left text-primary-brand">Admin Menu</SheetTitle>
+            </SheetHeader>
+            <div className="mt-4">
+              {sidebarContent}
+            </div>
+          </SheetContent>
+        </Sheet>
+      </div>
+
+      {/* Desktop Layout */}
+      <div className="flex">
+        {/* Desktop Sidebar */}
+        <div className="hidden lg:block w-64 bg-white shadow-lg h-screen fixed left-0 top-0">
+          {sidebarContent}
+        </div>
+
+        {/* Main Content */}
+        <div className="w-full lg:ml-64 pt-16 lg:pt-0">
+          {/* Top Bar */}
+          <header className="bg-white shadow-sm border-b border-gray-200">
+            <div className="px-4 sm:px-6 py-4">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+                <div>
+                  <h2 className="text-xl sm:text-2xl font-bold text-foreground">
+                    {activeTab === "dashboard" && "Dashboard Overview"}
+                    {activeTab === "tenants" && "Tenant Management"}
+                    {activeTab === "products" && "Product Management"}
+                    {activeTab === "payments" && "Payment Management"}
+                    {activeTab === "settings" && "Platform Settings"}
+                  </h2>
+                  <p className="text-muted-foreground text-sm sm:text-base">
+                    {activeTab === "dashboard" && "Welcome back! Here's what's happening across your platform."}
+                    {activeTab === "tenants" && "Manage your tenant stores and configurations."}
+                    {activeTab === "products" && "Create and manage products for your tenants."}
+                    {activeTab === "payments" && "Monitor payments and transactions across all tenants."}
+                    {activeTab === "settings" && "Configure platform-wide settings and preferences."}
+                  </p>
+                </div>
+                <div className="flex items-center space-x-4">
+                  <a
+                    href="/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-brand"
+                  >
+                    <ExternalLink className="mr-2 h-4 w-4" />
+                    View Store
+                  </a>
+                </div>
+              </div>
+            </div>
+          </header>
+
+          {/* Dashboard Content */}
+          <div className="p-4 sm:p-6">
+            {/* Dashboard Overview Tab */}
+            {activeTab === "dashboard" && (
+              <>
+                {dashboardStats ? (
+                  <>
+                    {/* Stats Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
+                      <Card>
+                        <CardContent className="p-4 sm:p-6">
+                          <div className="flex items-center">
+                            <div className="bg-primary-brand/10 rounded-full p-2 sm:p-3">
+                              <Store className="text-primary-brand h-5 w-5 sm:h-6 sm:w-6" />
+                            </div>
+                            <div className="ml-3 sm:ml-4">
+                              <p className="text-xs sm:text-sm font-medium text-muted-foreground">Total Tenants</p>
+                              <p className="text-xl sm:text-2xl font-bold text-foreground">{(dashboardStats as any).totalTenants}</p>
+                            </div>
+                          </div>
+                          <div className="mt-4">
+                            <span className="text-muted-foreground text-xs sm:text-sm">
+                              Active store instances
+                            </span>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardContent className="p-4 sm:p-6">
+                          <div className="flex items-center">
+                            <div className="bg-secondary-brand/10 rounded-full p-2 sm:p-3">
+                              <TrendingUp className="text-secondary-brand h-5 w-5 sm:h-6 sm:w-6" />
+                            </div>
+                            <div className="ml-3 sm:ml-4">
+                              <p className="text-xs sm:text-sm font-medium text-muted-foreground">Total Revenue</p>
+                              <p className="text-xl sm:text-2xl font-bold text-foreground">{(dashboardStats as any).totalRevenue}</p>
+                            </div>
+                          </div>
+                          <div className="mt-4">
+                            <span className="text-muted-foreground text-xs sm:text-sm">
+                              From completed payments
+                            </span>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-muted-foreground">Loading dashboard statistics...</p>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Other Tab Content */}
+            {activeTab === "tenants" && (
+              <div className="text-center py-8">
+                <p className="text-muted-foreground">Tenant management interface coming soon...</p>
+              </div>
+            )}
+
+            {activeTab === "products" && (
+              <div className="text-center py-8">
+                <p className="text-muted-foreground">Product management interface coming soon...</p>
+              </div>
+            )}
+
+            {activeTab === "payments" && (
+              <div className="text-center py-8">
+                <p className="text-muted-foreground">Payment management interface coming soon...</p>
+              </div>
+            )}
+
+            {activeTab === "settings" && (
+              <div className="text-center py-8">
+                <p className="text-muted-foreground">Platform settings interface coming soon...</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+                    View Store
+                  </a>
+                </div>
+              </div>
+            </div>
+          </header>
+
+          <div className="p-6">
+            {/* Dashboard Tab */}
+            {activeTab === "dashboard" && (
+              <>
+                {/* Stats Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                  <Card>
+                    <CardContent className="p-6">
+                      <div className="flex items-center">
+                        <div className="bg-primary-brand/10 rounded-full p-3">
+                          <Store className="text-primary-brand h-6 w-6" />
+                        </div>
+                        <div className="ml-4">
+                          <p className="text-sm font-medium text-muted-foreground">Total Tenants</p>
+                          <p className="text-2xl font-bold text-foreground">{stats.totalTenants}</p>
+                        </div>
+                      </div>
+                      <div className="mt-4">
+                        <span className="text-muted-foreground text-sm">
+                          Active store instances
+                        </span>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardContent className="p-6">
+                      <div className="flex items-center">
+                        <div className="bg-secondary-brand/10 rounded-full p-3">
+                          <CreditCard className="text-secondary-brand h-6 w-6" />
+                        </div>
+                        <div className="ml-4">
+                          <p className="text-sm font-medium text-muted-foreground">Total Revenue</p>
+                          <p className="text-2xl font-bold text-foreground">{stats.totalRevenue}</p>
+                        </div>
+                      </div>
+                      <div className="mt-4">
+                        <span className="text-muted-foreground text-sm">
+                          From completed payments
+                        </span>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardContent className="p-6">
+                      <div className="flex items-center">
+                        <div className="bg-accent-brand/10 rounded-full p-3">
+                          <BarChart3 className="text-accent-brand h-6 w-6" />
+                        </div>
+                        <div className="ml-4">
+                          <p className="text-sm font-medium text-muted-foreground">Total Orders</p>
+                          <p className="text-2xl font-bold text-foreground">{stats.totalOrders.toLocaleString()}</p>
+                        </div>
+                      </div>
+                      <div className="mt-4">
+                        <span className="text-muted-foreground text-sm">
+                          Across all tenant stores
+                        </span>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardContent className="p-6">
+                      <div className="flex items-center">
+                        <div className="bg-error-brand/10 rounded-full p-3">
+                          <Users className="text-error-brand h-6 w-6" />
+                        </div>
+                        <div className="ml-4">
+                          <p className="text-sm font-medium text-muted-foreground">Active Users</p>
+                          <p className="text-2xl font-bold text-foreground">{stats.activeUsers.toLocaleString()}</p>
+                        </div>
+                      </div>
+                      <div className="mt-4">
+                        <span className="text-muted-foreground text-sm">
+                          Logged in users
+                        </span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Recent Activity & Payment Overview */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  {/* Recent Tenants */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Recent Tenants</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {tenantsLoading ? (
+                        <div className="space-y-4">
+                          {Array.from({ length: 3 }).map((_, i) => (
+                            <div key={i} className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg">
+                              <Skeleton className="h-10 w-10 rounded-full" />
+                              <div className="flex-1 space-y-2">
+                                <Skeleton className="h-4 w-3/4" />
+                                <Skeleton className="h-3 w-1/2" />
+                              </div>
+                              <Skeleton className="h-6 w-16" />
+                            </div>
+                          ))}
+                        </div>
+                      ) : tenantsError ? (
+                        <Alert>
+                          <AlertCircle className="h-4 w-4" />
+                          <AlertDescription>Failed to load tenants.</AlertDescription>
+                        </Alert>
+                      ) : tenants.length === 0 ? (
+                        <p className="text-muted-foreground text-center py-8">No tenants created yet.</p>
+                      ) : (
+                        <div className="space-y-4">
+                          {tenants.slice(0, 3).map((tenant) => (
+                            <div key={tenant.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                              <div className="flex items-center space-x-3">
+                                <div className="bg-primary-brand/10 rounded-full p-2">
+                                  <Store className="text-primary-brand h-4 w-4" />
+                                </div>
+                                <div>
+                                  <p className="font-medium">{tenant.name}</p>
+                                  <p className="text-sm text-muted-foreground">{tenant.subdomain}.platform.com</p>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <Badge variant={tenant.isActive ? "default" : "secondary"} className="mb-1">
+                                  {tenant.isActive ? "Active" : "Inactive"}
+                                </Badge>
+                                <p className="text-xs text-muted-foreground">
+                                  {tenant.createdAt ? new Date(tenant.createdAt).toLocaleDateString() : "Recently"}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Payment Overview */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Payment Overview</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <div className="bg-secondary-brand/10 rounded-full p-2">
+                              <CheckCircle className="text-secondary-brand h-4 w-4" />
+                            </div>
+                            <div>
+                              <p className="font-medium">Successful Payments</p>
+                              <p className="text-sm text-muted-foreground">Total completed</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xl font-bold text-secondary-brand">
+                              {(dashboardPaymentStats as any)?.totalTransactions || "0"}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              {(dashboardPaymentStats as any)?.successRate || "0.0"}%
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <div className="bg-yellow-500/10 rounded-full p-2">
+                              <Clock className="text-yellow-600 h-4 w-4" />
+                            </div>
+                            <div>
+                              <p className="font-medium">Pending Payments</p>
+                              <p className="text-sm text-muted-foreground">Awaiting completion</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xl font-bold text-yellow-600">
+                              {(dashboardPaymentStats as any)?.pendingPayments || "0"}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              {(dashboardPaymentStats as any)?.pendingRevenue || "R 0.00"}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <div className="bg-accent-brand/10 rounded-full p-2">
+                              <CreditCard className="text-accent-brand h-4 w-4" />
+                            </div>
+                            <div>
+                              <p className="font-medium">Total Revenue</p>
+                              <p className="text-sm text-muted-foreground">All transactions</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xl font-bold text-accent-brand">
+                              {(dashboardPaymentStats as any)?.totalRevenue || "R 0.00"}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              From {stats.totalTenants} tenant{stats.totalTenants !== 1 ? 's' : ''}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Paystack Integration Status */}
+                      <div className="mt-6 p-4 bg-secondary-brand/10 rounded-lg border border-secondary-brand/20">
+                        <div className="flex items-center space-x-2">
+                          <Shield className="h-4 w-4 text-secondary-brand" />
+                          <span className="font-medium text-secondary-brand">Paystack Integration Active</span>
+                        </div>
+                        <p className="text-sm text-muted-foreground mt-1">All webhooks verified and functioning</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </>
+            )}
+
+            {/* Tenants Tab */}
+            {activeTab === "tenants" && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Create New Tenant */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Create New Tenant</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Form {...tenantForm}>
+                      <form onSubmit={tenantForm.handleSubmit(onCreateTenant)} className="space-y-4">
+                        <FormField
+                          control={tenantForm.control}
+                          name="name"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Store Name</FormLabel>
+                              <FormControl>
+                                <Input placeholder="My Store" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={tenantForm.control}
+                          name="subdomain"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Subdomain</FormLabel>
+                              <FormControl>
+                                <div className="flex">
+                                  <Input placeholder="mystore" className="rounded-r-none" {...field} />
+                                  <span className="bg-muted border border-l-0 border-input rounded-r-md px-3 py-2 text-muted-foreground">
+                                    .platform.com
+                                  </span>
+                                </div>
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={tenantForm.control}
+                          name="ownerEmail"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Owner Email</FormLabel>
+                              <FormControl>
+                                <Input type="email" placeholder="owner@example.com" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={tenantForm.control}
+                          name="heroTitle"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Hero Title (Optional)</FormLabel>
+                              <FormControl>
+                                <Input placeholder="Welcome to our store" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={tenantForm.control}
+                          name="heroSubtitle"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Hero Subtitle (Optional)</FormLabel>
+                              <FormControl>
+                                <Textarea placeholder="Discover amazing products" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <Button 
+                          type="submit" 
+                          className="w-full bg-primary-brand hover:bg-primary-brand/90"
+                          disabled={createTenantMutation.isPending}
+                        >
+                          {createTenantMutation.isPending ? "Creating..." : "Create Tenant"}
+                        </Button>
+                      </form>
+                    </Form>
+                  </CardContent>
+                </Card>
+
+                {/* Tenant List */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>All Tenants ({tenants.length})</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {tenantsLoading ? (
+                      <div className="space-y-4">
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <div key={i} className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg">
+                            <Skeleton className="h-10 w-10 rounded-full" />
+                            <div className="flex-1 space-y-2">
+                              <Skeleton className="h-4 w-3/4" />
+                              <Skeleton className="h-3 w-1/2" />
+                            </div>
+                            <Skeleton className="h-6 w-16" />
+                          </div>
+                        ))}
+                      </div>
+                    ) : tenantsError ? (
+                      <Alert>
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>Failed to load tenants.</AlertDescription>
+                      </Alert>
+                    ) : tenants.length === 0 ? (
+                      <p className="text-muted-foreground text-center py-8">No tenants created yet.</p>
+                    ) : (
+                      <div className="space-y-4 max-h-96 overflow-y-auto">
+                        {tenants.map((tenant) => (
+                          <div key={tenant.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                            <div className="flex items-center space-x-3">
+                              <div className="bg-primary-brand/10 rounded-full p-2">
+                                <Store className="text-primary-brand h-4 w-4" />
+                              </div>
+                              <div>
+                                <p className="font-medium">{tenant.name}</p>
+                                <p className="text-sm text-muted-foreground">{tenant.subdomain}.platform.com</p>
+                                <p className="text-xs text-muted-foreground">{tenant.ownerEmail}</p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <Badge variant={tenant.isActive ? "default" : "secondary"} className="mb-1">
+                                {tenant.isActive ? "Active" : "Inactive"}
+                              </Badge>
+                              <p className="text-xs text-muted-foreground">
+                                {tenant.createdAt ? new Date(tenant.createdAt).toLocaleDateString() : "Recently"}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {/* Products Tab */}
+            {activeTab === "products" && (
+              <div className="space-y-6">
+                {/* Tenant Selection */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Select Tenant Store</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {tenants.map((tenant) => (
+                        <div
+                          key={tenant.id}
+                          className={`p-4 border rounded-lg cursor-pointer transition-colors ${
+                            selectedTenant === tenant.id
+                              ? "border-primary-brand bg-primary-brand/5"
+                              : "border-gray-200 hover:border-gray-300"
+                          }`}
+                          onClick={() => setSelectedTenant(tenant.id)}
+                        >
+                          <div className="flex items-center space-x-3">
+                            <div className="bg-primary-brand/10 rounded-full p-2">
+                              <Store className="text-primary-brand h-4 w-4" />
+                            </div>
+                            <div>
+                              <p className="font-medium">{tenant.name}</p>
+                              <p className="text-sm text-muted-foreground">{tenant.subdomain}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {selectedTenant && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Create Product for {tenants.find(t => t.id === selectedTenant)?.name}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <Form {...productForm}>
+                        <form onSubmit={productForm.handleSubmit(onCreateProduct)} className="space-y-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <FormField
+                              control={productForm.control}
+                              name="name"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Product Name</FormLabel>
+                                  <FormControl>
+                                    <Input placeholder="MacBook Pro 16 inch" {...field} />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={productForm.control}
+                              name="price"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Price (NGN)</FormLabel>
+                                  <FormControl>
+                                    <Input type="number" step="0.01" placeholder="2499.99" {...field} />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+                          <FormField
+                            control={productForm.control}
+                            name="description"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Short Description</FormLabel>
+                                <FormControl>
+                                  <Textarea placeholder="Brief product description" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={productForm.control}
+                            name="longDescription"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Detailed Description (Optional)</FormLabel>
+                                <FormControl>
+                                  <Textarea placeholder="Detailed product description" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <FormField
+                              control={productForm.control}
+                              name="category"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Category (Optional)</FormLabel>
+                                  <FormControl>
+                                    <Input placeholder="Electronics" {...field} />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={productForm.control}
+                              name="stock"
+                              render={({ field: { value, onChange, ...field } }) => (
+                                <FormItem>
+                                  <FormLabel>Stock Quantity</FormLabel>
+                                  <FormControl>
+                                    <Input 
+                                      type="number" 
+                                      placeholder="100" 
+                                      value={value || ""} 
+                                      onChange={(e) => onChange(e.target.value ? Number(e.target.value) : undefined)}
+                                      {...field} 
+                                    />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={productForm.control}
+                              name="imageUrl"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Image URL (Optional)</FormLabel>
+                                  <FormControl>
+                                    <Input placeholder="https://example.com/image.jpg" {...field} />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+                          <Button 
+                            type="submit" 
+                            className="w-full bg-primary-brand hover:bg-primary-brand/90"
+                            disabled={createProductMutation.isPending}
+                          >
+                            {createProductMutation.isPending ? "Creating Product..." : "Create Product"}
+                          </Button>
+                        </form>
+                      </Form>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            )}
+
+            {/* Payments Tab */}
+            {activeTab === "payments" && (
+              <div className="space-y-6">
+                {/* Payment Overview Stats */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                  <Card>
+                    <CardContent className="p-6">
+                      <div className="flex items-center">
+                        <div className="bg-secondary-brand/10 rounded-full p-3">
+                          <CreditCard className="text-secondary-brand h-6 w-6" />
+                        </div>
+                        <div className="ml-4">
+                          <p className="text-sm font-medium text-muted-foreground">Total Revenue</p>
+                          <p className="text-2xl font-bold text-foreground">
+                            {paymentStatsLoading ? "Loading..." : paymentStats.totalRevenue || "R 0.00"}
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-6">
+                      <div className="flex items-center">
+                        <div className="bg-accent-brand/10 rounded-full p-3">
+                          <BarChart3 className="text-accent-brand h-6 w-6" />
+                        </div>
+                        <div className="ml-4">
+                          <p className="text-sm font-medium text-muted-foreground">Successful Payments</p>
+                          <p className="text-2xl font-bold text-foreground">
+                            {paymentStatsLoading ? "Loading..." : paymentStats.totalTransactions || "0"}
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-6">
+                      <div className="flex items-center">
+                        <div className="bg-yellow-500/10 rounded-full p-3">
+                          <Clock className="text-yellow-600 h-6 w-6" />
+                        </div>
+                        <div className="ml-4">
+                          <p className="text-sm font-medium text-muted-foreground">Pending Payments</p>
+                          <p className="text-2xl font-bold text-foreground">
+                            {paymentStatsLoading ? "Loading..." : paymentStats.pendingPayments || "0"}
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-6">
+                      <div className="flex items-center">
+                        <div className="bg-primary-brand/10 rounded-full p-3">
+                          <TrendingUp className="text-primary-brand h-6 w-6" />
+                        </div>
+                        <div className="ml-4">
+                          <p className="text-sm font-medium text-muted-foreground">Success Rate</p>
+                          <p className="text-2xl font-bold text-foreground">
+                            {paymentStatsLoading ? "Loading..." : `${paymentStats.successRate || "0.0"}%`}
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Recent Transactions */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Recent Transactions</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {paymentsLoading ? (
+                      <div className="space-y-4">
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <div key={i} className="flex items-center space-x-4 p-4 border border-gray-200 rounded-lg">
+                            <Skeleton className="h-10 w-10 rounded" />
+                            <div className="flex-1 space-y-2">
+                              <Skeleton className="h-4 w-3/4" />
+                              <Skeleton className="h-3 w-1/2" />
+                            </div>
+                            <Skeleton className="h-6 w-20" />
+                          </div>
+                        ))}
+                      </div>
+                    ) : !payments || payments.length === 0 ? (
+                      <p className="text-muted-foreground text-center py-8">No payment transactions found.</p>
+                    ) : (
+                      <div className="space-y-4">
+                        {payments.slice(0, 10).map((payment: any) => (
+                          <div key={payment.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                            <div className="flex items-center space-x-4">
+                              <div className="p-2 rounded-full bg-secondary-brand/10">
+                                <CheckCircle className="h-4 w-4 text-secondary-brand" />
+                              </div>
+                              <div>
+                                <p className="font-medium">Order #{payment.orderNumber}</p>
+                                <p className="text-sm text-muted-foreground">
+                                  {payment.customerEmail} • {payment.tenantName}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {payment.createdAt ? new Date(payment.createdAt).toLocaleDateString() : 'Date unavailable'}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-medium">{formatPrice(parseFloat(payment.total))}</p>
+                              <Badge variant="default">Paid</Badge>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {/* Settings Tab */}
+            {activeTab === "settings" && (
+              <div className="space-y-6">
+                {/* Platform Configuration */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Platform Configuration</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                          <h3 className="text-lg font-medium mb-4">Payment Settings</h3>
+                          <div className="space-y-4">
+                            <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                              <div>
+                                <p className="font-medium">Paystack Integration</p>
+                                <p className="text-sm text-muted-foreground">Payment gateway for African markets</p>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <CheckCircle className="h-4 w-4 text-secondary-brand" />
+                                <span className="text-sm text-secondary-brand">Active</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                              <div>
+                                <p className="font-medium">Webhook Verification</p>
+                                <p className="text-sm text-muted-foreground">Secure payment confirmations</p>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <Shield className="h-4 w-4 text-primary-brand" />
+                                <span className="text-sm text-primary-brand">Enabled</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div>
+                          <h3 className="text-lg font-medium mb-4">System Status</h3>
+                          <div className="space-y-4">
+                            <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                              <div>
+                                <p className="font-medium">Database Connection</p>
+                                <p className="text-sm text-muted-foreground">PostgreSQL with Neon</p>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <CheckCircle className="h-4 w-4 text-secondary-brand" />
+                                <span className="text-sm text-secondary-brand">Connected</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                              <div>
+                                <p className="font-medium">Session Storage</p>
+                                <p className="text-sm text-muted-foreground">PostgreSQL-based sessions</p>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <CheckCircle className="h-4 w-4 text-secondary-brand" />
+                                <span className="text-sm text-secondary-brand">Active</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <h3 className="text-lg font-medium mb-4">Platform Information</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="p-4 border border-gray-200 rounded-lg">
+                            <p className="text-sm text-muted-foreground">Platform Version</p>
+                            <p className="font-medium">v1.0.0</p>
+                          </div>
+                          <div className="p-4 border border-gray-200 rounded-lg">
+                            <p className="text-sm text-muted-foreground">Database Version</p>
+                            <p className="font-medium">PostgreSQL 15</p>
+                          </div>
+                          <div className="p-4 border border-gray-200 rounded-lg">
+                            <p className="text-sm text-muted-foreground">Default Currency</p>
+                            <p className="font-medium">South African Rand (ZAR)</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <Alert>
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>
+                          Platform settings are managed through environment variables and configuration files. 
+                          For security reasons, sensitive configuration changes should be made through the deployment environment.
+                        </AlertDescription>
+                      </Alert>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

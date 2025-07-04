@@ -31,48 +31,51 @@ export function ProductCard({ product, onViewDetails }: ProductCardProps) {
   };
 
   return (
-    <Card className="bg-white rounded-lg shadow-md hover:shadow-xl transition-shadow duration-300 overflow-hidden">
+    <Card className="bg-white rounded-lg shadow-md hover:shadow-xl transition-shadow duration-300 overflow-hidden h-full flex flex-col">
       <div 
-        className="w-full h-48 bg-gray-200 bg-cover bg-center cursor-pointer"
+        className="w-full h-48 sm:h-56 bg-gray-200 bg-cover bg-center cursor-pointer flex-shrink-0"
         style={{
           backgroundImage: product.imageUrl ? `url(${product.imageUrl})` : 'none'
         }}
         onClick={() => onViewDetails?.(product)}
       >
         {!product.imageUrl && (
-          <div className="w-full h-full flex items-center justify-center text-gray-400">
+          <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm">
             No Image
           </div>
         )}
       </div>
       
-      <CardContent className="p-6">
+      <CardContent className="p-4 sm:p-6 flex-1 flex flex-col">
         <h3 
-          className="text-lg font-semibold mb-2 cursor-pointer hover:text-primary-brand transition-colors"
+          className="text-base sm:text-lg font-semibold mb-2 cursor-pointer hover:text-primary-brand transition-colors line-clamp-2"
           onClick={() => onViewDetails?.(product)}
         >
           {product.name}
         </h3>
-        <p className="text-gray-600 text-sm mb-4 line-clamp-2">
+        <p className="text-gray-600 text-xs sm:text-sm mb-4 line-clamp-2 flex-1">
           {product.description}
         </p>
-        <div className="flex justify-between items-center">
-          <span className="text-2xl font-bold text-primary-brand">
-            {formatPrice(product.price)}
-          </span>
-          <Button 
-            className="bg-primary-brand text-white hover:bg-primary-brand/90 transition-colors duration-200"
-            onClick={handleAddToCart}
-            disabled={isAddingToCart || product.stock === 0}
-          >
-            {product.stock === 0 ? 'Out of Stock' : 'Add to Cart'}
-          </Button>
+        <div className="mt-auto space-y-3">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+            <span className="text-xl sm:text-2xl font-bold text-primary-brand">
+              {formatPrice(product.price)}
+            </span>
+            <Button 
+              className="bg-primary-brand text-white hover:bg-primary-brand/90 transition-colors duration-200 text-sm sm:text-base w-full sm:w-auto"
+              onClick={handleAddToCart}
+              disabled={isAddingToCart || product.stock === 0}
+              size="sm"
+            >
+              {product.stock === 0 ? 'Out of Stock' : 'Add to Cart'}
+            </Button>
+          </div>
+          {product.stock && product.stock < 10 && product.stock > 0 && (
+            <p className="text-xs sm:text-sm text-orange-600 mt-2">
+              Only {product.stock} left in stock
+            </p>
+          )}
         </div>
-        {product.stock && product.stock < 10 && product.stock > 0 && (
-          <p className="text-sm text-warning-color mt-2">
-            Only {product.stock} left in stock
-          </p>
-        )}
       </CardContent>
     </Card>
   );

@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { ShoppingCart, Search, User, Menu, Settings, LogOut, Package, LogIn, UserPlus } from "lucide-react";
+import { ShoppingCart, Search, User, Menu, Settings, LogOut, Package, LogIn, UserPlus, X } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useTenant } from "@/hooks/use-tenant";
 import { useCart } from "@/hooks/use-cart";
 import { useAuth } from "@/hooks/useAuth";
@@ -13,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 export function Header() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { data: tenant } = useTenant();
   const { cartItemCount } = useCart();
   const { user, isAuthenticated, logout, isLoggingOut } = useAuth();
@@ -189,9 +191,135 @@ export function Header() {
               </div>
             )}
 
-            <Button variant="ghost" size="icon" className="md:hidden text-gray-600 hover:text-primary-brand">
-              <Menu className="h-5 w-5" />
-            </Button>
+            {/* Mobile Menu */}
+            <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="icon" className="md:hidden text-gray-600 hover:text-primary-brand">
+                  <Menu className="h-5 w-5" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="w-[300px] sm:w-[350px]">
+                <SheetHeader>
+                  <SheetTitle className="text-left">
+                    {tenant?.name || "Store"} Menu
+                  </SheetTitle>
+                </SheetHeader>
+                <div className="mt-6 space-y-4">
+                  {/* Navigation Links */}
+                  <div className="space-y-3">
+                    <Link 
+                      href="/" 
+                      className="block text-lg font-medium text-gray-900 hover:text-primary-brand transition-colors"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                    >
+                      Home
+                    </Link>
+                    <Link 
+                      href="/search" 
+                      className="block text-lg font-medium text-gray-600 hover:text-primary-brand transition-colors"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                    >
+                      Products
+                    </Link>
+                    <Link 
+                      href="/about" 
+                      className="block text-lg font-medium text-gray-600 hover:text-primary-brand transition-colors"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                    >
+                      About
+                    </Link>
+                    <Link 
+                      href="/contact" 
+                      className="block text-lg font-medium text-gray-600 hover:text-primary-brand transition-colors"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                    >
+                      Contact
+                    </Link>
+                    <Link 
+                      href="/admin" 
+                      className="block text-lg font-medium text-orange-600 hover:text-orange-500 transition-colors border-l-4 border-orange-500 pl-3"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                    >
+                      Admin Panel
+                    </Link>
+                  </div>
+
+                  {/* Divider */}
+                  <div className="border-t border-gray-200 my-6"></div>
+
+                  {/* User Section */}
+                  {isAuthenticated ? (
+                    <div className="space-y-4">
+                      <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                        <div className="bg-primary-brand/10 rounded-full p-2">
+                          <User className="h-5 w-5 text-primary-brand" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900">
+                            {user?.firstName && user?.lastName 
+                              ? `${user.firstName} ${user.lastName}`
+                              : user?.username || 'User'
+                            }
+                          </p>
+                          <p className="text-sm text-gray-500">{user?.email}</p>
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Link 
+                          href="/my-orders" 
+                          className="flex items-center space-x-3 p-3 text-gray-600 hover:text-primary-brand hover:bg-gray-50 rounded-lg transition-colors"
+                          onClick={() => setIsMobileMenuOpen(false)}
+                        >
+                          <Package className="h-5 w-5" />
+                          <span>My Orders</span>
+                        </Link>
+                        <Link 
+                          href="/account-settings" 
+                          className="flex items-center space-x-3 p-3 text-gray-600 hover:text-primary-brand hover:bg-gray-50 rounded-lg transition-colors"
+                          onClick={() => setIsMobileMenuOpen(false)}
+                        >
+                          <Settings className="h-5 w-5" />
+                          <span>Account Settings</span>
+                        </Link>
+                        <button
+                          onClick={() => {
+                            logout();
+                            setIsMobileMenuOpen(false);
+                          }}
+                          disabled={isLoggingOut}
+                          className="flex items-center space-x-3 p-3 w-full text-left text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        >
+                          <LogOut className="h-5 w-5" />
+                          <span>{isLoggingOut ? 'Signing out...' : 'Sign Out'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <Link 
+                        href="/login"
+                        onClick={() => setIsMobileMenuOpen(false)}
+                      >
+                        <Button variant="outline" className="w-full justify-start">
+                          <LogIn className="h-4 w-4 mr-2" />
+                          Sign In
+                        </Button>
+                      </Link>
+                      <Link 
+                        href="/register"
+                        onClick={() => setIsMobileMenuOpen(false)}
+                      >
+                        <Button className="w-full justify-start bg-primary-brand hover:bg-primary-brand/90">
+                          <UserPlus className="h-4 w-4 mr-2" />
+                          Sign Up
+                        </Button>
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              </SheetContent>
+            </Sheet>
           </div>
         </div>
       </div>

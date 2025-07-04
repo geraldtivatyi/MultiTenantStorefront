@@ -60,25 +60,25 @@ export function Storefront() {
           }}
         >
           <div className="absolute inset-0 bg-gradient-to-r from-orange-500/70 to-pink-600/70"></div>
-          <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
+          <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16 md:py-24">
             <div className="text-center">
               {tenantLoading ? (
                 <div className="space-y-4">
-                  <Skeleton className="h-12 w-3/4 mx-auto bg-white/20" />
-                  <Skeleton className="h-6 w-1/2 mx-auto bg-white/20" />
+                  <Skeleton className="h-8 sm:h-12 w-3/4 mx-auto bg-white/20" />
+                  <Skeleton className="h-4 sm:h-6 w-1/2 mx-auto bg-white/20" />
                 </div>
               ) : (
                 <>
-                  <h1 className="text-4xl md:text-6xl font-bold mb-6">
+                  <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-4 sm:mb-6 leading-tight">
                     {tenant?.heroTitle || "Latest Tech, Best Prices"}
                   </h1>
-                  <p className="text-xl md:text-2xl mb-8 text-gray-100">
+                  <p className="text-lg sm:text-xl md:text-2xl mb-6 sm:mb-8 text-gray-100 max-w-3xl mx-auto px-4">
                     {tenant?.heroSubtitle || "Discover cutting-edge technology for your digital lifestyle"}
                   </p>
                 </>
               )}
               <Link href="#products">
-                <button className="bg-white text-orange-600 px-8 py-3 rounded-lg text-lg font-semibold hover:bg-gray-100 transition-colors duration-200">
+                <button className="bg-white text-orange-600 px-6 sm:px-8 py-2.5 sm:py-3 rounded-lg text-base sm:text-lg font-semibold hover:bg-gray-100 transition-colors duration-200 shadow-lg">
                   Shop Now
                 </button>
               </Link>
@@ -118,10 +118,10 @@ export function Storefront() {
             </AlertDescription>
           </Alert>
         ) : productsLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 lg:gap-8">
             {Array.from({ length: 8 }).map((_, i) => (
               <div key={i} className="space-y-4">
-                <Skeleton className="h-48 w-full" />
+                <Skeleton className="h-48 sm:h-56 w-full" />
                 <Skeleton className="h-4 w-3/4" />
                 <Skeleton className="h-4 w-1/2" />
                 <Skeleton className="h-8 w-1/3" />
@@ -130,12 +130,12 @@ export function Storefront() {
           </div>
         ) : filteredProducts.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-muted-foreground text-lg">
+            <p className="text-muted-foreground text-base sm:text-lg px-4">
               {searchQuery ? "No products found matching your search." : "No products available at the moment."}
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 lg:gap-8">
             {filteredProducts.map((product) => (
               <ProductCard 
                 key={product.id} 
@@ -148,29 +148,29 @@ export function Storefront() {
       </section>
 
       {/* Trust Indicators */}
-      <section className="bg-white py-16">
+      <section className="bg-white py-12 sm:py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
-            <div className="flex flex-col items-center">
-              <div className="bg-secondary-brand/10 rounded-full p-4 mb-4">
-                <Truck className="text-secondary-brand text-2xl h-8 w-8" />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 sm:gap-8 text-center">
+            <div className="flex flex-col items-center p-4">
+              <div className="bg-secondary-brand/10 rounded-full p-3 sm:p-4 mb-3 sm:mb-4">
+                <Truck className="text-secondary-brand h-6 w-6 sm:h-8 sm:w-8" />
               </div>
-              <h3 className="text-lg font-semibold mb-2">Free Shipping</h3>
-              <p className="text-muted-foreground">Free shipping on orders over ₦50,000</p>
+              <h3 className="text-base sm:text-lg font-semibold mb-2">Free Shipping</h3>
+              <p className="text-muted-foreground text-sm sm:text-base">Free shipping on orders over R500</p>
             </div>
-            <div className="flex flex-col items-center">
-              <div className="bg-secondary-brand/10 rounded-full p-4 mb-4">
-                <Shield className="text-secondary-brand text-2xl h-8 w-8" />
+            <div className="flex flex-col items-center p-4">
+              <div className="bg-secondary-brand/10 rounded-full p-3 sm:p-4 mb-3 sm:mb-4">
+                <Shield className="text-secondary-brand h-6 w-6 sm:h-8 sm:w-8" />
               </div>
-              <h3 className="text-lg font-semibold mb-2">Secure Payment</h3>
-              <p className="text-muted-foreground">Protected by Paystack encryption</p>
+              <h3 className="text-base sm:text-lg font-semibold mb-2">Secure Payment</h3>
+              <p className="text-muted-foreground text-sm sm:text-base">Protected by Paystack encryption</p>
             </div>
-            <div className="flex flex-col items-center">
-              <div className="bg-secondary-brand/10 rounded-full p-4 mb-4">
-                <RotateCcw className="text-secondary-brand text-2xl h-8 w-8" />
+            <div className="flex flex-col items-center p-4">
+              <div className="bg-secondary-brand/10 rounded-full p-3 sm:p-4 mb-3 sm:mb-4">
+                <RotateCcw className="text-secondary-brand h-6 w-6 sm:h-8 sm:w-8" />
               </div>
-              <h3 className="text-lg font-semibold mb-2">Easy Returns</h3>
-              <p className="text-muted-foreground">30-day return policy</p>
+              <h3 className="text-base sm:text-lg font-semibold mb-2">Easy Returns</h3>
+              <p className="text-muted-foreground text-sm sm:text-base">30-day return policy</p>
             </div>
           </div>
         </div>
