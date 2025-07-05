@@ -1,8 +1,12 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 import { 
   BarChart3, 
   Package, 
@@ -11,21 +15,54 @@ import {
   DollarSign,
   Users,
   Menu,
-  ExternalLink
+  ExternalLink,
+  Settings
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useTenant } from "@/hooks/use-tenant";
 
 export function VendorDashboard() {
-  const [activeTab, setActiveTab] = useState<"overview" | "products" | "orders" | "analytics">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "products" | "orders" | "analytics" | "settings">("overview");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [whatsappPhone, setWhatsappPhone] = useState("");
   const { user } = useAuth();
   const { data: tenant } = useTenant();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   // Fetch vendor stats
   const { data: vendorStats } = useQuery({
     queryKey: ["/api/vendor/stats"],
     enabled: activeTab === "overview",
+  });
+
+  // Initialize WhatsApp phone from tenant data
+  useEffect(() => {
+    if ((tenant as any)?.whatsappPhone) {
+      setWhatsappPhone((tenant as any).whatsappPhone);
+    }
+  }, [tenant]);
+
+  // Update WhatsApp phone mutation
+  const updateWhatsAppMutation = useMutation({
+    mutationFn: async (phone: string) => {
+      const response = await apiRequest("/api/tenant/whatsapp", "PUT", { whatsappPhone: phone });
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "WhatsApp settings updated",
+        description: "Your WhatsApp phone number has been saved successfully.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/storefront/tenant"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Update failed",
+        description: error.message || "Failed to update WhatsApp settings.",
+        variant: "destructive",
+      });
+    },
   });
 
   const handleTabChange = (tab: typeof activeTab) => {
@@ -84,6 +121,17 @@ export function VendorDashboard() {
           >
             <TrendingUp className="mr-3 h-4 w-4" />
             Analytics
+          </button>
+          <button
+            onClick={() => handleTabChange("settings")}
+            className={`w-full text-left flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors ${
+              activeTab === "settings"
+                ? "bg-primary-brand text-white"
+                : "text-muted-foreground hover:bg-gray-100"
+            }`}
+          >
+            <Settings className="mr-3 h-4 w-4" />
+            Settings
           </button>
         </div>
       </nav>
@@ -261,6 +309,81 @@ export function VendorDashboard() {
             {activeTab === "analytics" && (
               <div className="text-center py-8">
                 <p className="text-muted-foreground">Analytics dashboard coming soon...</p>
+              </div>
+            )}
+
+            {activeTab === "settings" && (
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-2xl font-bold text-foreground">Settings</h2>
+                  <p className="text-muted-foreground">Manage your store settings and notifications</p>
+                </div>
+
+                {/* WhatsApp Notifications */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Settings className="h-5 w-5" />
+                      WhatsApp Notifications
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                      Receive WhatsApp notifications when new orders are placed in your store. 
+                      Enter your WhatsApp phone number in international format (e.g., +27823456789).
+                    </p>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="whatsapp-phone">WhatsApp Phone Number</Label>
+                      <Input
+                        id="whatsapp-phone"
+                        type="tel"
+                        placeholder="+27823456789"
+                        value={whatsappPhone}
+                        onChange={(e) => setWhatsappPhone(e.target.value)}
+                        className="max-w-md"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Include the country code (e.g., +27 for South Africa)
+                      </p>
+                    </div>
+
+                    <Button
+                      onClick={() => updateWhatsAppMutation.mutate(whatsappPhone)}
+                      disabled={updateWhatsAppMutation.isPending}
+                      className="bg-primary-brand hover:bg-primary-brand/90"
+                    >
+                      {updateWhatsAppMutation.isPending ? "Saving..." : "Save WhatsApp Settings"}
+                    </Button>
+
+                    {(tenant as any)?.whatsappPhone && (
+                      <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-md">
+                        <p className="text-sm text-green-800">
+                          ✓ WhatsApp notifications are enabled for: {(tenant as any).whatsappPhone}
+                        </p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Store Information */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Store Information</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label className="text-sm text-muted-foreground">Store Name</Label>
+                        <p className="font-medium">{tenant?.name}</p>
+                      </div>
+                      <div>
+                        <Label className="text-sm text-muted-foreground">Subdomain</Label>
+                        <p className="font-medium">{tenant?.subdomain}.{window.location.hostname}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
             )}
           </div>

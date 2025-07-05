@@ -52,6 +52,7 @@ export interface IStorage {
   getTenant(id: number): Promise<Tenant | undefined>;
   getTenantBySubdomain(subdomain: string): Promise<Tenant | undefined>;
   createTenant(tenant: InsertTenant): Promise<Tenant>;
+  updateTenant(id: number, updates: Partial<InsertTenant>): Promise<Tenant | undefined>;
   getAllTenants(): Promise<Tenant[]>;
 
   // Product management
@@ -172,6 +173,15 @@ export class DatabaseStorage implements IStorage {
 
   async createTenant(insertTenant: InsertTenant): Promise<Tenant> {
     const [tenant] = await db.insert(tenants).values(insertTenant).returning();
+    return tenant;
+  }
+
+  async updateTenant(id: number, updates: Partial<InsertTenant>): Promise<Tenant | undefined> {
+    const [tenant] = await db
+      .update(tenants)
+      .set(updates)
+      .where(eq(tenants.id, id))
+      .returning();
     return tenant;
   }
 

@@ -13,6 +13,7 @@ export const tenants = pgTable("tenants", {
   createdAt: timestamp("created_at").defaultNow(),
   heroTitle: text("hero_title"),
   heroSubtitle: text("hero_subtitle"),
+  whatsappPhone: text("whatsapp_phone"), // WhatsApp number for order notifications
 });
 
 // Users table

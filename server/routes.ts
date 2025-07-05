@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { tenantMiddleware, adminBypass, type TenantRequest } from "./middleware/tenant";
 import { paystackService, type PaystackWebhookEvent } from "./services/paystack";
+import { whatsappService, type WhatsAppWebhookEvent } from "./services/whatsapp";
 import { 
   AuthService, 
   authMiddleware, 
@@ -706,6 +707,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
             status: status,
             metadata: JSON.stringify(event.data),
           });
+
+          // Send WhatsApp notification to vendor
+          try {
+            const order = await storage.getOrder(orderId);
+            if (order) {
+              const tenant = await storage.getTenant(order.tenantId);
+              const orderItems = await storage.getOrderItems(orderId);
+              
+              if (tenant && tenant.whatsappPhone) {
+                await whatsappService.sendOrderNotification(
+                  tenant.whatsappPhone,
+                  {
+                    orderId: order.id,
+                    storeName: tenant.name,
+                    customerName: order.customerName,
+                    totalAmount: parseFloat(order.total),
+                    currency: 'ZAR',
+                    itemCount: orderItems.length,
+                  }
+                );
+                console.log(`WhatsApp notification sent to vendor for order ${orderId}`);
+              }
+            }
+          } catch (whatsappError) {
+            console.error('Failed to send WhatsApp notification:', whatsappError);
+            // Don't fail the webhook if WhatsApp notification fails
+          }
         }
       }
 
@@ -713,6 +741,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Webhook error:', error);
       res.status(500).json({ error: 'Webhook processing failed' });
+    }
+  });
+
+  // WhatsApp webhook endpoints
+  app.get('/api/webhooks/whatsapp', (req, res) => {
+    const mode = req.query['hub.mode'];
+    const token = req.query['hub.verify_token'];
+    const challenge = req.query['hub.challenge'];
+
+    const result = whatsappService.verifyWebhook(mode as string, token as string, challenge as string);
+    if (result) {
+      res.status(200).send(result);
+    } else {
+      res.status(403).send('Forbidden');
+    }
+  });
+
+  app.post('/api/webhooks/whatsapp', (req, res) => {
+    try {
+      const event: WhatsAppWebhookEvent = req.body;
+      whatsappService.processWebhookEvent(event);
+      res.status(200).json({ received: true });
+    } catch (error) {
+      console.error('WhatsApp webhook error:', error);
+      res.status(500).json({ error: 'Webhook processing failed' });
+    }
+  });
+
+  // WhatsApp configuration endpoint
+  app.get('/api/whatsapp/config', (req, res) => {
+    res.json(whatsappService.getConfig());
+  });
+
+  // Test WhatsApp notification endpoint (for testing)
+  app.post('/api/whatsapp/test', requireAuth, requirePlatformAdmin, async (req, res) => {
+    try {
+      const { phone, message } = req.body;
+      
+      if (!phone || !message) {
+        return res.status(400).json({ error: 'Phone and message are required' });
+      }
+
+      const result = await whatsappService.sendMessage({
+        to: phone,
+        text: message,
+      });
+
+      res.json({ success: true, result });
+    } catch (error) {
+      console.error('Test WhatsApp message error:', error);
+      res.status(500).json({ error: 'Failed to send test message' });
+    }
+  });
+
+  // Update tenant WhatsApp settings
+  app.put('/api/tenant/whatsapp', requireAuth, requireTenantOwner, async (req: AuthenticatedRequest, res) => {
+    try {
+      const { whatsappPhone } = req.body;
+      const userId = req.user!.id;
+      
+      // Get user's tenant
+      const user = await storage.getUser(userId);
+      if (!user || !user.tenantId) {
+        return res.status(400).json({ error: 'User not associated with a tenant' });
+      }
+
+      // Update tenant's WhatsApp phone
+      await storage.updateTenant(user.tenantId, { whatsappPhone });
+      
+      res.json({ success: true, message: 'WhatsApp settings updated' });
+    } catch (error) {
+      console.error('Update WhatsApp settings error:', error);
+      res.status(500).json({ error: 'Failed to update WhatsApp settings' });
     }
   });
 
