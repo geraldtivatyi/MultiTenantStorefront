@@ -56,10 +56,15 @@ export class EmailService {
       return false;
     }
 
+    if (!this.config.fromEmail) {
+      console.error('From email not configured');
+      return false;
+    }
+
     try {
       await this.mailService.send({
         to: data.to,
-        from: this.config.fromEmail!,
+        from: this.config.fromEmail,
         subject: data.subject,
         text: data.text,
         html: data.html,
@@ -67,8 +72,11 @@ export class EmailService {
 
       console.log(`Email sent successfully to ${data.to}: ${data.subject}`);
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to send email:', error);
+      if (error.response?.body?.errors) {
+        console.error('SendGrid errors:', error.response.body.errors);
+      }
       return false;
     }
   }
