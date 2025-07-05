@@ -159,6 +159,31 @@ export function clearSessionCookie(res: Response) {
   res.clearCookie('sessionId');
 }
 
+// Role-based middleware functions
+export function requirePlatformAdmin(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  
+  if (req.user.role !== 'platform_admin') {
+    return res.status(403).json({ error: 'Platform admin access required' });
+  }
+  
+  next();
+}
+
+export function requireTenantOwner(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  
+  if (req.user.role !== 'tenant_owner' && req.user.role !== 'platform_admin') {
+    return res.status(403).json({ error: 'Tenant owner access required' });
+  }
+  
+  next();
+}
+
 // Validation schemas for auth
 export const loginSchema = {
   email: { required: true, type: 'email' },

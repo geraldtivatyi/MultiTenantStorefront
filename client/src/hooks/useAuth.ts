@@ -9,7 +9,8 @@ export interface User {
   lastName?: string;
   phone?: string;
   tenantId?: number;
-  isAdmin: boolean;
+  role: string; // platform_admin, tenant_owner, customer
+  isAdmin: boolean; // deprecated, use role instead
   emailVerified: boolean;
   isActive: boolean;
   lastLoginAt?: string;

@@ -8,6 +8,7 @@ import { ProductDetail } from "@/pages/product-detail";
 import { Cart } from "@/pages/cart";
 import { Checkout } from "@/pages/checkout";
 import { AdminDashboard } from "@/pages/admin-dashboard";
+import { VendorDashboard } from "@/pages/vendor-dashboard";
 import { MyOrders } from "@/pages/my-orders";
 import { AccountSettings } from "@/pages/account-settings";
 import { About } from "@/pages/about";
@@ -28,6 +29,7 @@ function Router() {
       <Route path="/cart" component={Cart} />
       <Route path="/checkout" component={Checkout} />
       <Route path="/admin" component={AdminDashboard} />
+      <Route path="/vendor" component={VendorDashboard} />
       <Route path="/my-orders" component={MyOrders} />
       <Route path="/account-settings" component={AccountSettings} />
       <Route path="/search" component={Search} />

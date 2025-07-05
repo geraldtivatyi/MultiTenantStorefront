@@ -25,7 +25,8 @@ export const users = pgTable("users", {
   lastName: text("last_name"),
   phone: text("phone"),
   tenantId: integer("tenant_id").references(() => tenants.id),
-  isAdmin: boolean("is_admin").default(false),
+  role: text("role").notNull().default("customer"), // platform_admin, tenant_owner, customer
+  isAdmin: boolean("is_admin").default(false), // deprecated, use role instead
   emailVerified: boolean("email_verified").default(false),
   isActive: boolean("is_active").default(true),
   lastLoginAt: timestamp("last_login_at"),

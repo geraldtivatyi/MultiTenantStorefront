@@ -8,6 +8,8 @@ import {
   authMiddleware, 
   requireAuth, 
   requireAdmin, 
+  requirePlatformAdmin,
+  requireTenantOwner,
   setSessionCookie, 
   clearSessionCookie,
   type AuthenticatedRequest 
@@ -896,7 +898,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get dashboard stats (admin)
-  app.get('/api/admin/stats', async (req, res) => {
+  app.get('/api/admin/stats', requireAuth, requirePlatformAdmin, async (req, res) => {
     try {
       const tenants = await storage.getAllTenants();
       
@@ -1047,6 +1049,98 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Get payment stats error:', error);
       res.status(500).json({ error: 'Failed to get payment statistics' });
+    }
+  });
+
+  // === VENDOR API ENDPOINTS ===
+  
+  // Get vendor dashboard stats for tenant owner
+  app.get('/api/vendor/stats', requireAuth, requireTenantOwner, async (req: AuthenticatedRequest, res) => {
+    try {
+      const user = req.user!;
+      
+      // Get the tenant this user owns
+      let tenantId = user.tenantId;
+      if (!tenantId) {
+        return res.status(404).json({ error: 'No tenant associated with this user' });
+      }
+
+      // Get tenant orders
+      const orders = await storage.getOrdersByTenant(tenantId);
+      const paidOrders = orders.filter(order => order.status === 'paid');
+      
+      // Calculate revenue
+      const totalRevenue = paidOrders.reduce((sum, order) => {
+        return sum + parseFloat(order.total);
+      }, 0);
+
+      // Get products for this tenant
+      const products = await storage.getProductsByTenant(tenantId);
+
+      // Get unique customers (based on email from orders)
+      const uniqueCustomers = new Set();
+      paidOrders.forEach(order => {
+        if (order.customerEmail) {
+          uniqueCustomers.add(order.customerEmail);
+        }
+      });
+
+      const vendorStats = {
+        totalRevenue: `R ${totalRevenue.toFixed(2)}`,
+        totalOrders: orders.length,
+        totalProducts: products.length,
+        totalCustomers: uniqueCustomers.size,
+      };
+
+      res.json(vendorStats);
+    } catch (error) {
+      console.error('Get vendor stats error:', error);
+      res.status(500).json({ error: 'Failed to get vendor statistics' });
+    }
+  });
+
+  // Get vendor orders
+  app.get('/api/vendor/orders', requireAuth, requireTenantOwner, async (req: AuthenticatedRequest, res) => {
+    try {
+      const user = req.user!;
+      
+      let tenantId = user.tenantId;
+      if (!tenantId) {
+        return res.status(404).json({ error: 'No tenant associated with this user' });
+      }
+
+      const orders = await storage.getOrdersByTenant(tenantId);
+      
+      // Sort by creation date (newest first)
+      orders.sort((a, b) => {
+        if (!a.createdAt && !b.createdAt) return 0;
+        if (!a.createdAt) return 1;
+        if (!b.createdAt) return -1;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      });
+
+      res.json(orders);
+    } catch (error) {
+      console.error('Get vendor orders error:', error);
+      res.status(500).json({ error: 'Failed to get vendor orders' });
+    }
+  });
+
+  // Get vendor products
+  app.get('/api/vendor/products', requireAuth, requireTenantOwner, async (req: AuthenticatedRequest, res) => {
+    try {
+      const user = req.user!;
+      
+      let tenantId = user.tenantId;
+      if (!tenantId) {
+        return res.status(404).json({ error: 'No tenant associated with this user' });
+      }
+
+      const products = await storage.getProductsByTenant(tenantId);
+      res.json(products);
+    } catch (error) {
+      console.error('Get vendor products error:', error);
+      res.status(500).json({ error: 'Failed to get vendor products' });
     }
   });
 

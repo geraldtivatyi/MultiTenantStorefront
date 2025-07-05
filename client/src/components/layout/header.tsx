@@ -64,12 +64,23 @@ export function Header() {
               >
                 Contact
               </Link>
-              <Link 
-                href="/admin" 
-                className="text-gray-600 hover:text-orange-500 px-3 py-2 rounded-md text-sm font-medium transition-colors border border-orange-500"
-              >
-                Admin
-              </Link>
+              {/* Role-based Dashboard Access */}
+              {user?.role === "platform_admin" && (
+                <Link 
+                  href="/admin" 
+                  className="text-gray-600 hover:text-orange-500 px-3 py-2 rounded-md text-sm font-medium transition-colors border border-orange-500"
+                >
+                  Admin
+                </Link>
+              )}
+              {user?.role === "tenant_owner" && (
+                <Link 
+                  href="/vendor" 
+                  className="text-gray-600 hover:text-primary-brand px-3 py-2 rounded-md text-sm font-medium transition-colors border border-primary-brand"
+                >
+                  Vendor Dashboard
+                </Link>
+              )}
             </div>
           </nav>
 
@@ -285,13 +296,26 @@ export function Header() {
                     >
                       <span className="text-lg font-medium">Contact</span>
                     </Link>
-                    <Link 
-                      href="/admin" 
-                      className="flex items-center space-x-3 p-3 text-orange-600 hover:text-orange-500 hover:bg-orange-50 rounded-lg transition-colors border-l-4 border-orange-500"
-                      onClick={() => setIsMobileMenuOpen(false)}
-                    >
-                      <span className="text-lg font-medium">Admin Panel</span>
-                    </Link>
+                    
+                    {/* Role-based Dashboard Access for Mobile */}
+                    {user?.role === "platform_admin" && (
+                      <Link 
+                        href="/admin" 
+                        className="flex items-center space-x-3 p-3 text-orange-600 hover:text-orange-500 hover:bg-orange-50 rounded-lg transition-colors border-l-4 border-orange-500"
+                        onClick={() => setIsMobileMenuOpen(false)}
+                      >
+                        <span className="text-lg font-medium">Admin Panel</span>
+                      </Link>
+                    )}
+                    {user?.role === "tenant_owner" && (
+                      <Link 
+                        href="/vendor" 
+                        className="flex items-center space-x-3 p-3 text-primary-brand hover:text-primary-brand/80 hover:bg-blue-50 rounded-lg transition-colors border-l-4 border-primary-brand"
+                        onClick={() => setIsMobileMenuOpen(false)}
+                      >
+                        <span className="text-lg font-medium">Vendor Dashboard</span>
+                      </Link>
+                    )}
                   </div>
 
                   {/* Divider */}
