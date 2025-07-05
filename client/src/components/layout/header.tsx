@@ -23,19 +23,21 @@ export function Header() {
     <header className="bg-white shadow-sm border-b border-gray-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
+          {/* Logo */}
           <div className="flex items-center">
             <Link href="/" className="flex-shrink-0">
-              <span className="text-2xl font-bold text-primary-brand">
+              <span className="text-xl sm:text-2xl font-bold text-primary-brand">
                 {tenant?.name || "Store"}
               </span>
               {tenant?.subdomain && (
-                <span className="text-xs text-gray-500 ml-2">
+                <span className="text-xs text-gray-500 ml-2 hidden sm:inline">
                   {tenant.subdomain}.platform.com
                 </span>
               )}
             </Link>
           </div>
 
+          {/* Desktop Navigation */}
           <nav className="hidden md:block">
             <div className="ml-10 flex items-baseline space-x-4">
               <Link 
@@ -71,7 +73,8 @@ export function Header() {
             </div>
           </nav>
 
-          <div className="flex items-center space-x-4">
+          {/* Desktop Actions */}
+          <div className="hidden md:flex items-center space-x-4">
             {/* Search Dialog */}
             <Dialog open={isSearchOpen} onOpenChange={setIsSearchOpen}>
               <DialogTrigger asChild>
@@ -190,11 +193,26 @@ export function Header() {
                 </Link>
               </div>
             )}
+          </div>
+
+          {/* Mobile Actions */}
+          <div className="flex md:hidden items-center space-x-2">
+            {/* Mobile Cart */}
+            <Link href="/cart">
+              <Button variant="ghost" size="icon" className="text-gray-600 hover:text-primary-brand relative">
+                <ShoppingCart className="h-5 w-5" />
+                {cartItemCount > 0 && (
+                  <Badge className="absolute -top-2 -right-2 bg-error-brand text-white text-xs h-5 w-5 flex items-center justify-center p-0">
+                    {cartItemCount}
+                  </Badge>
+                )}
+              </Button>
+            </Link>
 
             {/* Mobile Menu */}
             <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
               <SheetTrigger asChild>
-                <Button variant="ghost" size="icon" className="md:hidden text-gray-600 hover:text-primary-brand">
+                <Button variant="ghost" size="icon" className="text-gray-600 hover:text-primary-brand">
                   <Menu className="h-5 w-5" />
                 </Button>
               </SheetTrigger>
@@ -204,48 +222,80 @@ export function Header() {
                     {tenant?.name || "Store"} Menu
                   </SheetTitle>
                 </SheetHeader>
-                <div className="mt-6 space-y-4">
+                <div className="mt-6 space-y-6">
+                  {/* Mobile Search */}
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <div className="flex items-center space-x-2">
+                      <Search className="h-5 w-5 text-gray-400" />
+                      <Input
+                        placeholder="Search products..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="border-0 bg-transparent focus:ring-0 focus:border-0"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && searchQuery.trim()) {
+                            window.location.href = `/?search=${encodeURIComponent(searchQuery)}`;
+                            setIsMobileMenuOpen(false);
+                          }
+                        }}
+                      />
+                      <Button 
+                        onClick={() => {
+                          if (searchQuery.trim()) {
+                            window.location.href = `/?search=${encodeURIComponent(searchQuery)}`;
+                            setIsMobileMenuOpen(false);
+                          }
+                        }}
+                        disabled={!searchQuery.trim()}
+                        size="sm"
+                        className="bg-primary-brand hover:bg-primary-brand/90"
+                      >
+                        Go
+                      </Button>
+                    </div>
+                  </div>
+
                   {/* Navigation Links */}
                   <div className="space-y-3">
                     <Link 
                       href="/" 
-                      className="block text-lg font-medium text-gray-900 hover:text-primary-brand transition-colors"
+                      className="flex items-center space-x-3 p-3 text-gray-900 hover:text-primary-brand hover:bg-gray-50 rounded-lg transition-colors"
                       onClick={() => setIsMobileMenuOpen(false)}
                     >
-                      Home
+                      <span className="text-lg font-medium">Home</span>
                     </Link>
                     <Link 
                       href="/search" 
-                      className="block text-lg font-medium text-gray-600 hover:text-primary-brand transition-colors"
+                      className="flex items-center space-x-3 p-3 text-gray-600 hover:text-primary-brand hover:bg-gray-50 rounded-lg transition-colors"
                       onClick={() => setIsMobileMenuOpen(false)}
                     >
-                      Products
+                      <span className="text-lg font-medium">Products</span>
                     </Link>
                     <Link 
                       href="/about" 
-                      className="block text-lg font-medium text-gray-600 hover:text-primary-brand transition-colors"
+                      className="flex items-center space-x-3 p-3 text-gray-600 hover:text-primary-brand hover:bg-gray-50 rounded-lg transition-colors"
                       onClick={() => setIsMobileMenuOpen(false)}
                     >
-                      About
+                      <span className="text-lg font-medium">About</span>
                     </Link>
                     <Link 
                       href="/contact" 
-                      className="block text-lg font-medium text-gray-600 hover:text-primary-brand transition-colors"
+                      className="flex items-center space-x-3 p-3 text-gray-600 hover:text-primary-brand hover:bg-gray-50 rounded-lg transition-colors"
                       onClick={() => setIsMobileMenuOpen(false)}
                     >
-                      Contact
+                      <span className="text-lg font-medium">Contact</span>
                     </Link>
                     <Link 
                       href="/admin" 
-                      className="block text-lg font-medium text-orange-600 hover:text-orange-500 transition-colors border-l-4 border-orange-500 pl-3"
+                      className="flex items-center space-x-3 p-3 text-orange-600 hover:text-orange-500 hover:bg-orange-50 rounded-lg transition-colors border-l-4 border-orange-500"
                       onClick={() => setIsMobileMenuOpen(false)}
                     >
-                      Admin Panel
+                      <span className="text-lg font-medium">Admin Panel</span>
                     </Link>
                   </div>
 
                   {/* Divider */}
-                  <div className="border-t border-gray-200 my-6"></div>
+                  <div className="border-t border-gray-200"></div>
 
                   {/* User Section */}
                   {isAuthenticated ? (
