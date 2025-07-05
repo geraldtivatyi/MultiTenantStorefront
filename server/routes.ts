@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { tenantMiddleware, adminBypass, type TenantRequest } from "./middleware/tenant";
 import { paystackService, type PaystackWebhookEvent } from "./services/paystack";
 import { whatsappService, type WhatsAppWebhookEvent } from "./services/whatsapp";
+import { emailService } from "./services/email";
 import { 
   AuthService, 
   authMiddleware, 
@@ -708,31 +709,88 @@ export async function registerRoutes(app: Express): Promise<Server> {
             metadata: JSON.stringify(event.data),
           });
 
-          // Send WhatsApp notification to vendor
+          // Send notifications to vendor and customer
           try {
             const order = await storage.getOrder(orderId);
             if (order) {
               const tenant = await storage.getTenant(order.tenantId);
               const orderItems = await storage.getOrderItems(orderId);
               
-              if (tenant && tenant.whatsappPhone) {
-                await whatsappService.sendOrderNotification(
-                  tenant.whatsappPhone,
-                  {
-                    orderId: order.id,
-                    storeName: tenant.name,
-                    customerName: order.customerName,
-                    totalAmount: parseFloat(order.total),
-                    currency: 'ZAR',
-                    itemCount: orderItems.length,
+              if (tenant && orderItems.length > 0) {
+                // Prepare notification data
+                const notificationData = {
+                  orderId: order.id,
+                  storeName: tenant.name,
+                  customerName: order.customerName,
+                  customerEmail: order.customerEmail,
+                  totalAmount: parseFloat(order.total),
+                  currency: 'ZAR',
+                  itemCount: orderItems.length,
+                  items: orderItems.map(item => ({
+                    name: item.product.name,
+                    quantity: item.quantity,
+                    price: item.price,
+                  })),
+                };
+
+                // Send WhatsApp notification to vendor
+                if (tenant.whatsappPhone) {
+                  try {
+                    await whatsappService.sendOrderNotification(
+                      tenant.whatsappPhone,
+                      {
+                        orderId: notificationData.orderId,
+                        storeName: notificationData.storeName,
+                        customerName: notificationData.customerName,
+                        totalAmount: notificationData.totalAmount,
+                        currency: notificationData.currency,
+                        itemCount: notificationData.itemCount,
+                      }
+                    );
+                    console.log(`WhatsApp notification sent to vendor for order ${orderId}`);
+                  } catch (whatsappError) {
+                    console.error('Failed to send WhatsApp notification:', whatsappError);
                   }
-                );
-                console.log(`WhatsApp notification sent to vendor for order ${orderId}`);
+                }
+
+                // Send email notification to vendor
+                try {
+                  await emailService.sendOrderNotificationToVendor({
+                    vendorEmail: tenant.ownerEmail,
+                    storeName: notificationData.storeName,
+                    orderId: notificationData.orderId,
+                    customerName: notificationData.customerName,
+                    customerEmail: notificationData.customerEmail,
+                    totalAmount: notificationData.totalAmount,
+                    currency: notificationData.currency,
+                    itemCount: notificationData.itemCount,
+                    items: notificationData.items,
+                  });
+                  console.log(`Email notification sent to vendor for order ${orderId}`);
+                } catch (emailError) {
+                  console.error('Failed to send email notification to vendor:', emailError);
+                }
+
+                // Send email confirmation to customer
+                try {
+                  await emailService.sendOrderConfirmationToCustomer({
+                    customerEmail: notificationData.customerEmail,
+                    customerName: notificationData.customerName,
+                    orderId: notificationData.orderId,
+                    storeName: notificationData.storeName,
+                    totalAmount: notificationData.totalAmount,
+                    currency: notificationData.currency,
+                    items: notificationData.items,
+                  });
+                  console.log(`Order confirmation email sent to customer for order ${orderId}`);
+                } catch (emailError) {
+                  console.error('Failed to send order confirmation email:', emailError);
+                }
               }
             }
-          } catch (whatsappError) {
-            console.error('Failed to send WhatsApp notification:', whatsappError);
-            // Don't fail the webhook if WhatsApp notification fails
+          } catch (notificationError) {
+            console.error('Failed to send notifications:', notificationError);
+            // Don't fail the webhook if notifications fail
           }
         }
       }
@@ -792,6 +850,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Test WhatsApp message error:', error);
       res.status(500).json({ error: 'Failed to send test message' });
+    }
+  });
+
+  // Email configuration endpoint
+  app.get('/api/email/config', (req, res) => {
+    res.json(emailService.getConfig());
+  });
+
+  // Test email notification endpoint (for testing)
+  app.post('/api/email/test', requireAuth, requirePlatformAdmin, async (req, res) => {
+    try {
+      const { email, subject, message } = req.body;
+      
+      if (!email || !subject || !message) {
+        return res.status(400).json({ error: 'Email, subject, and message are required' });
+      }
+
+      const result = await emailService.sendEmail({
+        to: email,
+        subject,
+        text: message,
+        html: `<p>${message.replace(/\n/g, '<br>')}</p>`,
+      });
+
+      res.json({ success: result, message: result ? 'Email sent successfully' : 'Email failed to send' });
+    } catch (error) {
+      console.error('Test email error:', error);
+      res.status(500).json({ error: 'Failed to send test email' });
     }
   });
 

@@ -1,8 +1,14 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 import { 
   BarChart3, 
   Store, 
@@ -11,8 +17,280 @@ import {
   Settings, 
   ExternalLink,
   TrendingUp,
-  Menu
+  Menu,
+  Mail,
+  MessageSquare,
+  CheckCircle,
+  XCircle,
+  Send
 } from "lucide-react";
+
+function SettingsTab() {
+  const { toast } = useToast();
+  const [emailForm, setEmailForm] = useState({
+    email: "",
+    subject: "",
+    message: ""
+  });
+  const [whatsappForm, setWhatsappForm] = useState({
+    phone: "",
+    message: ""
+  });
+
+  // Get email configuration
+  const { data: emailConfig } = useQuery({
+    queryKey: ["/api/email/config"],
+  });
+
+  // Get WhatsApp configuration
+  const { data: whatsappConfig } = useQuery({
+    queryKey: ["/api/whatsapp/config"],
+  });
+
+  // Email test mutation
+  const emailTestMutation = useMutation({
+    mutationFn: async (data: { email: string; subject: string; message: string }) => {
+      return await apiRequest("/api/email/test", "POST", data);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Email Sent",
+        description: "Test email sent successfully!",
+      });
+      setEmailForm({ email: "", subject: "", message: "" });
+    },
+    onError: (error) => {
+      toast({
+        title: "Email Failed",
+        description: "Failed to send test email. Please check your configuration.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // WhatsApp test mutation
+  const whatsappTestMutation = useMutation({
+    mutationFn: async (data: { phone: string; message: string }) => {
+      return await apiRequest("/api/whatsapp/test", "POST", data);
+    },
+    onSuccess: () => {
+      toast({
+        title: "WhatsApp Sent",
+        description: "Test WhatsApp message sent successfully!",
+      });
+      setWhatsappForm({ phone: "", message: "" });
+    },
+    onError: (error) => {
+      toast({
+        title: "WhatsApp Failed",
+        description: "Failed to send test WhatsApp message. Please check your configuration.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleEmailTest = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!emailForm.email || !emailForm.subject || !emailForm.message) {
+      toast({
+        title: "Missing Fields",
+        description: "Please fill in all email fields.",
+        variant: "destructive",
+      });
+      return;
+    }
+    emailTestMutation.mutate(emailForm);
+  };
+
+  const handleWhatsAppTest = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!whatsappForm.phone || !whatsappForm.message) {
+      toast({
+        title: "Missing Fields",
+        description: "Please fill in all WhatsApp fields.",
+        variant: "destructive",
+      });
+      return;
+    }
+    whatsappTestMutation.mutate(whatsappForm);
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-2xl font-bold tracking-tight">Platform Settings</h2>
+        <p className="text-muted-foreground">
+          Configure notification services and test system integrations.
+        </p>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-2">
+        {/* Email Configuration */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Mail className="h-5 w-5" />
+              Email Configuration
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center gap-2">
+              {emailConfig?.configured ? (
+                <CheckCircle className="h-5 w-5 text-green-500" />
+              ) : (
+                <XCircle className="h-5 w-5 text-red-500" />
+              )}
+              <span className="font-medium">
+                Status: {emailConfig?.configured ? "Configured" : "Not Configured"}
+              </span>
+            </div>
+            
+            {emailConfig?.configured && (
+              <div>
+                <p className="text-sm text-muted-foreground">
+                  From Email: {emailConfig.fromEmail}
+                </p>
+              </div>
+            )}
+
+            <form onSubmit={handleEmailTest} className="space-y-3">
+              <div>
+                <Label htmlFor="test-email">Test Email Address</Label>
+                <Input
+                  id="test-email"
+                  type="email"
+                  placeholder="test@example.com"
+                  value={emailForm.email}
+                  onChange={(e) => setEmailForm(prev => ({ ...prev, email: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label htmlFor="test-subject">Subject</Label>
+                <Input
+                  id="test-subject"
+                  placeholder="Test Email Subject"
+                  value={emailForm.subject}
+                  onChange={(e) => setEmailForm(prev => ({ ...prev, subject: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label htmlFor="test-message">Message</Label>
+                <Textarea
+                  id="test-message"
+                  placeholder="Test email message content..."
+                  value={emailForm.message}
+                  onChange={(e) => setEmailForm(prev => ({ ...prev, message: e.target.value }))}
+                />
+              </div>
+              <Button 
+                type="submit" 
+                disabled={!emailConfig?.configured || emailTestMutation.isPending}
+                className="w-full"
+              >
+                {emailTestMutation.isPending ? (
+                  "Sending..."
+                ) : (
+                  <>
+                    <Send className="h-4 w-4 mr-2" />
+                    Send Test Email
+                  </>
+                )}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        {/* WhatsApp Configuration */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <MessageSquare className="h-5 w-5" />
+              WhatsApp Configuration
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center gap-2">
+              {whatsappConfig?.configured ? (
+                <CheckCircle className="h-5 w-5 text-green-500" />
+              ) : (
+                <XCircle className="h-5 w-5 text-red-500" />
+              )}
+              <span className="font-medium">
+                Status: {whatsappConfig?.configured ? "Configured" : "Not Configured"}
+              </span>
+            </div>
+
+            {whatsappConfig?.configured && (
+              <div>
+                <p className="text-sm text-muted-foreground">
+                  Phone Number ID: {whatsappConfig.phoneNumberId}
+                </p>
+              </div>
+            )}
+
+            <form onSubmit={handleWhatsAppTest} className="space-y-3">
+              <div>
+                <Label htmlFor="test-phone">Test Phone Number</Label>
+                <Input
+                  id="test-phone"
+                  placeholder="+27812345678"
+                  value={whatsappForm.phone}
+                  onChange={(e) => setWhatsappForm(prev => ({ ...prev, phone: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label htmlFor="test-whatsapp-message">Message</Label>
+                <Textarea
+                  id="test-whatsapp-message"
+                  placeholder="Test WhatsApp message content..."
+                  value={whatsappForm.message}
+                  onChange={(e) => setWhatsappForm(prev => ({ ...prev, message: e.target.value }))}
+                />
+              </div>
+              <Button 
+                type="submit" 
+                disabled={!whatsappConfig?.configured || whatsappTestMutation.isPending}
+                className="w-full"
+              >
+                {whatsappTestMutation.isPending ? (
+                  "Sending..."
+                ) : (
+                  <>
+                    <Send className="h-4 w-4 mr-2" />
+                    Send Test WhatsApp
+                  </>
+                )}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* System Information */}
+      <Card>
+        <CardHeader>
+          <CardTitle>System Information</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <h4 className="font-semibold">Email Notifications</h4>
+              <p className="text-sm text-muted-foreground">
+                Automatic emails are sent to vendors when new orders are received and to customers when orders are confirmed.
+              </p>
+            </div>
+            <div>
+              <h4 className="font-semibold">WhatsApp Notifications</h4>
+              <p className="text-sm text-muted-foreground">
+                Automatic WhatsApp messages are sent to vendors when new orders are received (if phone number is configured).
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 
 export function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<"dashboard" | "tenants" | "products" | "payments" | "settings">("dashboard");
@@ -238,9 +516,7 @@ export function AdminDashboard() {
             )}
 
             {activeTab === "settings" && (
-              <div className="text-center py-8">
-                <p className="text-muted-foreground">Platform settings interface coming soon...</p>
-              </div>
+              <SettingsTab />
             )}
           </div>
         </div>
