@@ -64,21 +64,22 @@ export function Header() {
               >
                 Contact
               </Link>
-              {/* Role-based Dashboard Access */}
-              {user?.role === "platform_admin" && (
-                <Link 
-                  href="/admin" 
-                  className="text-gray-600 hover:text-orange-500 px-3 py-2 rounded-md text-sm font-medium transition-colors border border-orange-500"
-                >
-                  Admin
-                </Link>
-              )}
+              {/* Vendor Dashboard - appears right after Contact for tenant owners */}
               {user?.role === "tenant_owner" && (
                 <Link 
                   href="/vendor" 
-                  className="text-gray-600 hover:text-primary-brand px-3 py-2 rounded-md text-sm font-medium transition-colors border border-primary-brand"
+                  className="text-blue-600 hover:text-blue-800 px-3 py-2 rounded-md text-sm font-medium transition-colors border border-blue-600 bg-blue-50"
                 >
                   Vendor Dashboard
+                </Link>
+              )}
+              {/* Admin Panel - appears for platform administrators */}
+              {user?.role === "platform_admin" && (
+                <Link 
+                  href="/admin" 
+                  className="text-orange-600 hover:text-orange-800 px-3 py-2 rounded-md text-sm font-medium transition-colors border border-orange-600 bg-orange-50"
+                >
+                  Platform Admin
                 </Link>
               )}
             </div>
@@ -297,23 +298,25 @@ export function Header() {
                       <span className="text-lg font-medium">Contact</span>
                     </Link>
                     
-                    {/* Role-based Dashboard Access for Mobile */}
-                    {user?.role === "platform_admin" && (
-                      <Link 
-                        href="/admin" 
-                        className="flex items-center space-x-3 p-3 text-orange-600 hover:text-orange-500 hover:bg-orange-50 rounded-lg transition-colors border-l-4 border-orange-500"
-                        onClick={() => setIsMobileMenuOpen(false)}
-                      >
-                        <span className="text-lg font-medium">Admin Panel</span>
-                      </Link>
-                    )}
+                    {/* Vendor Dashboard - appears right after Contact for tenant owners */}
                     {user?.role === "tenant_owner" && (
                       <Link 
                         href="/vendor" 
-                        className="flex items-center space-x-3 p-3 text-primary-brand hover:text-primary-brand/80 hover:bg-blue-50 rounded-lg transition-colors border-l-4 border-primary-brand"
+                        className="flex items-center space-x-3 p-3 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors border-l-4 border-blue-600"
                         onClick={() => setIsMobileMenuOpen(false)}
                       >
                         <span className="text-lg font-medium">Vendor Dashboard</span>
+                      </Link>
+                    )}
+                    
+                    {/* Platform Admin - appears for platform administrators */}
+                    {user?.role === "platform_admin" && (
+                      <Link 
+                        href="/admin" 
+                        className="flex items-center space-x-3 p-3 text-orange-600 hover:text-orange-800 hover:bg-orange-50 rounded-lg transition-colors border-l-4 border-orange-600"
+                        onClick={() => setIsMobileMenuOpen(false)}
+                      >
+                        <span className="text-lg font-medium">Platform Admin</span>
                       </Link>
                     )}
                   </div>
