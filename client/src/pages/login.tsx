@@ -39,13 +39,16 @@ export function Login() {
       return apiRequest("/api/auth/login", "POST", data);
     },
     onSuccess: (response: any) => {
+      console.log("Login response:", response);
       const { user, redirectUrl } = response;
+      console.log("User object:", user);
+      console.log("Redirect URL:", redirectUrl);
       
       // Show role-specific welcome message
       let welcomeMessage = "You have been successfully logged in.";
-      if (user.role === 'platform_admin') {
+      if (user && user.role === 'platform_admin') {
         welcomeMessage = "Welcome back, Platform Administrator!";
-      } else if (user.role === 'tenant_owner') {
+      } else if (user && user.role === 'tenant_owner') {
         welcomeMessage = "Welcome back to your vendor dashboard!";
       }
       
