@@ -146,11 +146,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const sessionId = await AuthService.createSession(user.id);
       setSessionCookie(res, sessionId);
 
+      // Determine redirect URL based on user role
+      let redirectUrl = '/';
+      if (user.role === 'platform_admin') {
+        redirectUrl = '/admin';
+      } else if (user.role === 'tenant_owner') {
+        redirectUrl = '/vendor';
+      }
+
       // Return user without password
       const { password, ...userWithoutPassword } = user;
       res.json({ 
         user: userWithoutPassword,
-        message: 'Login successful'
+        message: 'Login successful',
+        redirectUrl
       });
     } catch (error) {
       if (error instanceof z.ZodError) {

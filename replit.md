@@ -156,3 +156,9 @@ Preferred communication style: Simple, everyday language.
   - Role-based middleware for API endpoint protection
   - Vendor dashboard shows tenant-specific stats, orders, and products
   - Mobile navigation organized with hamburger menu containing all functions
+- July 5, 2025: Implemented automatic dashboard redirection:
+  - Platform administrators automatically redirected to /admin after login
+  - Store owners (tenant_owner role) automatically redirected to /vendor after login
+  - Regular customers remain on homepage after login
+  - Role-specific welcome messages displayed during login
+  - Enhanced auth status endpoint to include role and tenant information

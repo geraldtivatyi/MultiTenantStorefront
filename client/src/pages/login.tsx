@@ -38,15 +38,25 @@ export function Login() {
     mutationFn: async (data: LoginFormData) => {
       return apiRequest("/api/auth/login", "POST", data);
     },
-    onSuccess: (data) => {
+    onSuccess: (response: any) => {
+      const { user, redirectUrl } = response;
+      
+      // Show role-specific welcome message
+      let welcomeMessage = "You have been successfully logged in.";
+      if (user.role === 'platform_admin') {
+        welcomeMessage = "Welcome back, Platform Administrator!";
+      } else if (user.role === 'tenant_owner') {
+        welcomeMessage = "Welcome back to your vendor dashboard!";
+      }
+      
       toast({
         title: "Welcome back!",
-        description: "You have been successfully logged in.",
+        description: welcomeMessage,
       });
-      // Redirect to home page
-      setLocation("/");
-      // Reload to update authentication state
-      window.location.reload();
+      
+      // Redirect to role-specific dashboard or home
+      const targetUrl = redirectUrl || "/";
+      window.location.href = targetUrl;
     },
     onError: (error: any) => {
       let message = "Login failed. Please try again.";
