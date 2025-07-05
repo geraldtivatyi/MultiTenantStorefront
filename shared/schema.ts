@@ -8,7 +8,13 @@ export const tenants = pgTable("tenants", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   subdomain: text("subdomain").notNull().unique(),
+  ownerId: integer("owner_id").references(() => users.id),
+  ownerName: text("owner_name"),
   ownerEmail: text("owner_email").notNull(),
+  ownerPhone: text("owner_phone"),
+  businessType: text("business_type").default("other"), // spaza_shop, street_vendor, home_business, market_stall, online_store, other
+  description: text("description"),
+  address: text("address"),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   heroTitle: text("hero_title"),

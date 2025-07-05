@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
@@ -24,6 +25,373 @@ import {
   XCircle,
   Send
 } from "lucide-react";
+
+function TenantsTab() {
+  const { toast } = useToast();
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [selectedTenant, setSelectedTenant] = useState<any>(null);
+  const [formData, setFormData] = useState({
+    name: "",
+    subdomain: "",
+    ownerName: "",
+    ownerEmail: "",
+    ownerPhone: "",
+    description: "",
+    address: "",
+    businessType: "spaza_shop"
+  });
+
+  // Fetch tenants
+  const { data: tenants, refetch: refetchTenants } = useQuery({
+    queryKey: ["/api/admin/tenants"],
+  });
+
+  // Create tenant mutation
+  const createTenantMutation = useMutation({
+    mutationFn: async (data: any) => {
+      return await apiRequest("/api/admin/tenants", "POST", data);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Store Created",
+        description: "New store has been successfully onboarded!",
+      });
+      setIsCreateModalOpen(false);
+      setFormData({
+        name: "",
+        subdomain: "",
+        ownerName: "",
+        ownerEmail: "",
+        ownerPhone: "",
+        description: "",
+        address: "",
+        businessType: "spaza_shop"
+      });
+      refetchTenants();
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: "Failed to create store. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Update tenant mutation
+  const updateTenantMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      return await apiRequest(`/api/admin/tenants/${id}`, "PUT", data);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Store Updated",
+        description: "Store information has been updated successfully!",
+      });
+      setSelectedTenant(null);
+      refetchTenants();
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: "Failed to update store. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleCreateSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.name || !formData.subdomain || !formData.ownerName || !formData.ownerEmail) {
+      toast({
+        title: "Missing Information",
+        description: "Please fill in all required fields.",
+        variant: "destructive",
+      });
+      return;
+    }
+    createTenantMutation.mutate(formData);
+  };
+
+  const handleUpdateSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTenant) return;
+    updateTenantMutation.mutate({ id: selectedTenant.id, data: formData });
+  };
+
+  const openEditModal = (tenant: any) => {
+    setSelectedTenant(tenant);
+    setFormData({
+      name: tenant.name || "",
+      subdomain: tenant.subdomain || "",
+      ownerName: tenant.ownerName || "",
+      ownerEmail: tenant.ownerEmail || "",
+      ownerPhone: tenant.ownerPhone || "",
+      description: tenant.description || "",
+      address: tenant.address || "",
+      businessType: tenant.businessType || "spaza_shop"
+    });
+  };
+
+  const getBusinessTypeLabel = (type: string) => {
+    const types: Record<string, string> = {
+      spaza_shop: "Spaza Shop",
+      street_vendor: "Street Vendor",
+      home_business: "Home Business",
+      market_stall: "Market Stall",
+      online_store: "Online Store",
+      other: "Other"
+    };
+    return types[type] || type;
+  };
+
+  const generateSubdomain = (name: string) => {
+    return name
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "")
+      .substring(0, 20);
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">Store Management</h2>
+          <p className="text-muted-foreground">
+            Onboard and manage stores including spaza shops, street vendors, and small businesses.
+          </p>
+        </div>
+        <Button onClick={() => setIsCreateModalOpen(true)}>
+          <Store className="h-4 w-4 mr-2" />
+          Add New Store
+        </Button>
+      </div>
+
+      {/* Tenants List */}
+      <div className="grid gap-4">
+        {tenants && tenants.length > 0 ? (
+          tenants.map((tenant: any) => (
+            <Card key={tenant.id}>
+              <CardContent className="p-6">
+                <div className="flex justify-between items-start">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-lg font-semibold">{tenant.name}</h3>
+                      <Badge variant="secondary">{getBusinessTypeLabel(tenant.businessType)}</Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground">{tenant.description}</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <span className="font-medium">Owner:</span> {tenant.ownerName}
+                      </div>
+                      <div>
+                        <span className="font-medium">Email:</span> {tenant.ownerEmail}
+                      </div>
+                      <div>
+                        <span className="font-medium">Phone:</span> {tenant.ownerPhone || "Not provided"}
+                      </div>
+                      <div>
+                        <span className="font-medium">Subdomain:</span> {tenant.subdomain}.geraldtivatyi.com
+                      </div>
+                    </div>
+                    {tenant.address && (
+                      <div className="text-sm">
+                        <span className="font-medium">Address:</span> {tenant.address}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => window.open(`https://${tenant.subdomain}.geraldtivatyi.com`, '_blank')}
+                    >
+                      <ExternalLink className="h-4 w-4 mr-1" />
+                      Visit Store
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openEditModal(tenant)}
+                    >
+                      Edit
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        ) : (
+          <Card>
+            <CardContent className="p-8 text-center">
+              <Store className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+              <h3 className="text-lg font-semibold mb-2">No Stores Yet</h3>
+              <p className="text-muted-foreground mb-4">
+                Start onboarding stores to grow your platform. Perfect for spaza shops, street vendors, and small businesses.
+              </p>
+              <Button onClick={() => setIsCreateModalOpen(true)}>
+                Add Your First Store
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      {/* Create/Edit Modal */}
+      {(isCreateModalOpen || selectedTenant) && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-lg font-semibold">
+                  {selectedTenant ? "Edit Store" : "Add New Store"}
+                </h3>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setIsCreateModalOpen(false);
+                    setSelectedTenant(null);
+                  }}
+                >
+                  ✕
+                </Button>
+              </div>
+
+              <form onSubmit={selectedTenant ? handleUpdateSubmit : handleCreateSubmit} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="name">Store Name *</Label>
+                    <Input
+                      id="name"
+                      value={formData.name}
+                      onChange={(e) => {
+                        const name = e.target.value;
+                        setFormData(prev => ({
+                          ...prev,
+                          name,
+                          subdomain: !selectedTenant ? generateSubdomain(name) : prev.subdomain
+                        }));
+                      }}
+                      placeholder="e.g. Mama's Spaza Shop"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="subdomain">Subdomain *</Label>
+                    <Input
+                      id="subdomain"
+                      value={formData.subdomain}
+                      onChange={(e) => setFormData(prev => ({ ...prev, subdomain: e.target.value }))}
+                      placeholder="mamaspaza"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Will be: {formData.subdomain}.geraldtivatyi.com
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="businessType">Business Type</Label>
+                  <select
+                    id="businessType"
+                    value={formData.businessType}
+                    onChange={(e) => setFormData(prev => ({ ...prev, businessType: e.target.value }))}
+                    className="w-full p-2 border rounded-md"
+                  >
+                    <option value="spaza_shop">Spaza Shop</option>
+                    <option value="street_vendor">Street Vendor</option>
+                    <option value="home_business">Home Business</option>
+                    <option value="market_stall">Market Stall</option>
+                    <option value="online_store">Online Store</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+
+                <div>
+                  <Label htmlFor="description">Description</Label>
+                  <Textarea
+                    id="description"
+                    value={formData.description}
+                    onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                    placeholder="Brief description of what this store sells..."
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="ownerName">Owner Name *</Label>
+                    <Input
+                      id="ownerName"
+                      value={formData.ownerName}
+                      onChange={(e) => setFormData(prev => ({ ...prev, ownerName: e.target.value }))}
+                      placeholder="Store owner's name"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="ownerEmail">Owner Email *</Label>
+                    <Input
+                      id="ownerEmail"
+                      type="email"
+                      value={formData.ownerEmail}
+                      onChange={(e) => setFormData(prev => ({ ...prev, ownerEmail: e.target.value }))}
+                      placeholder="owner@example.com"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="ownerPhone">Owner Phone</Label>
+                    <Input
+                      id="ownerPhone"
+                      value={formData.ownerPhone}
+                      onChange={(e) => setFormData(prev => ({ ...prev, ownerPhone: e.target.value }))}
+                      placeholder="+27 XX XXX XXXX"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="address">Physical Address</Label>
+                    <Input
+                      id="address"
+                      value={formData.address}
+                      onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
+                      placeholder="Street address or landmark"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setIsCreateModalOpen(false);
+                      setSelectedTenant(null);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={createTenantMutation.isPending || updateTenantMutation.isPending}
+                  >
+                    {(createTenantMutation.isPending || updateTenantMutation.isPending) ? (
+                      "Saving..."
+                    ) : selectedTenant ? (
+                      "Update Store"
+                    ) : (
+                      "Create Store"
+                    )}
+                  </Button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function SettingsTab() {
   const { toast } = useToast();
@@ -498,9 +866,7 @@ export function AdminDashboard() {
 
             {/* Other Tab Content */}
             {activeTab === "tenants" && (
-              <div className="text-center py-8">
-                <p className="text-muted-foreground">Tenant management interface coming soon...</p>
-              </div>
+              <TenantsTab />
             )}
 
             {activeTab === "products" && (

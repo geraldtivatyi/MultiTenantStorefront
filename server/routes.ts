@@ -881,6 +881,92 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Admin tenant management endpoints
+  app.get('/api/admin/tenants', requireAuth, requirePlatformAdmin, async (req: AuthenticatedRequest, res) => {
+    try {
+      const tenants = await storage.getAllTenants();
+      res.json(tenants);
+    } catch (error) {
+      console.error('Error fetching tenants:', error);
+      res.status(500).json({ error: 'Failed to fetch tenants' });
+    }
+  });
+
+  app.post('/api/admin/tenants', requireAuth, requirePlatformAdmin, async (req: AuthenticatedRequest, res) => {
+    try {
+      const tenantData = req.body;
+      
+      // Validate required fields
+      if (!tenantData.name || !tenantData.subdomain || !tenantData.ownerName || !tenantData.ownerEmail) {
+        return res.status(400).json({ error: 'Missing required fields' });
+      }
+
+      // Check if subdomain already exists
+      const existingTenant = await storage.getTenantBySubdomain(tenantData.subdomain);
+      if (existingTenant) {
+        return res.status(400).json({ error: 'Subdomain already exists' });
+      }
+
+      // Create user account for tenant owner
+      let ownerId = null;
+      try {
+        const existingUser = await storage.getUserByEmail(tenantData.ownerEmail);
+        if (existingUser) {
+          ownerId = existingUser.id;
+        } else {
+          // Create new user account
+          const newUser = await storage.createUser({
+            username: tenantData.ownerEmail,
+            email: tenantData.ownerEmail,
+            password: await AuthService.hashPassword('temp123'), // Temporary password
+            firstName: tenantData.ownerName.split(' ')[0] || tenantData.ownerName,
+            lastName: tenantData.ownerName.split(' ').slice(1).join(' ') || '',
+            role: 'tenant_owner',
+          });
+          ownerId = newUser.id;
+        }
+      } catch (error) {
+        console.error('Error creating/finding user:', error);
+        return res.status(500).json({ error: 'Failed to create user account' });
+      }
+
+      // Create tenant
+      const tenant = await storage.createTenant({
+        name: tenantData.name,
+        subdomain: tenantData.subdomain,
+        ownerId,
+        ownerName: tenantData.ownerName,
+        ownerEmail: tenantData.ownerEmail,
+        ownerPhone: tenantData.ownerPhone || null,
+        description: tenantData.description || null,
+        address: tenantData.address || null,
+        businessType: tenantData.businessType || 'other',
+      });
+
+      res.json(tenant);
+    } catch (error) {
+      console.error('Error creating tenant:', error);
+      res.status(500).json({ error: 'Failed to create tenant' });
+    }
+  });
+
+  app.put('/api/admin/tenants/:id', requireAuth, requirePlatformAdmin, async (req: AuthenticatedRequest, res) => {
+    try {
+      const tenantId = parseInt(req.params.id);
+      const updateData = req.body;
+
+      const tenant = await storage.updateTenant(tenantId, updateData);
+      if (!tenant) {
+        return res.status(404).json({ error: 'Tenant not found' });
+      }
+
+      res.json(tenant);
+    } catch (error) {
+      console.error('Error updating tenant:', error);
+      res.status(500).json({ error: 'Failed to update tenant' });
+    }
+  });
+
   // Update tenant WhatsApp settings
   app.put('/api/tenant/whatsapp', requireAuth, requireTenantOwner, async (req: AuthenticatedRequest, res) => {
     try {

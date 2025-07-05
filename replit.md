@@ -178,3 +178,12 @@ Preferred communication style: Simple, everyday language.
   - Added email configuration and testing capabilities to admin dashboard settings
   - System gracefully handles missing SendGrid credentials and continues operation
   - Email notifications complement WhatsApp notifications for complete vendor communication
+- July 5, 2025: Implemented comprehensive tenant store management for spaza shops and informal businesses:
+  - Added full tenant management interface in admin dashboard with create, read, update functionality
+  - Designed onboarding process specifically for South African informal businesses (spaza shops, street vendors, etc.)
+  - Business type categorization: spaza shop, street vendor, home business, market stall, online store, other
+  - Simplified registration requiring only essential information: store name, owner details, basic contact info
+  - Automatic subdomain generation and user account creation for store owners
+  - Enhanced tenant schema with business type, description, address, and owner contact details
+  - Store owners automatically get tenant_owner role and access to vendor dashboard
+  - Admin can manage all stores from centralized interface with easy editing and store visiting capabilities
