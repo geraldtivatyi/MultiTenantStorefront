@@ -36,7 +36,8 @@ export function Login() {
 
   const loginMutation = useMutation({
     mutationFn: async (data: LoginFormData) => {
-      return apiRequest("/api/auth/login", "POST", data);
+      const response = await apiRequest("/api/auth/login", "POST", data);
+      return response.json();
     },
     onSuccess: (response: any) => {
       console.log("Login response:", response);
