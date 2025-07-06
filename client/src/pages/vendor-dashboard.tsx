@@ -817,7 +817,10 @@ function ProductsManagement() {
     },
   });
 
-  const formatPrice = (price: number) => `R ${price.toFixed(2)}`;
+  const formatPrice = (price: number | string) => {
+    const numPrice = typeof price === 'string' ? parseFloat(price) : price;
+    return `R ${(numPrice || 0).toFixed(2)}`;
+  };
 
   if (isLoading) {
     return (
@@ -903,7 +906,7 @@ function ProductsManagement() {
                 <p className="text-sm text-muted-foreground">Avg. Price</p>
                 <p className="text-2xl font-bold">
                   {products.length > 0 
-                    ? formatPrice(products.reduce((sum: number, p: any) => sum + parseFloat(p.price), 0) / products.length)
+                    ? formatPrice(products.reduce((sum: number, p: any) => sum + (parseFloat(p.price) || 0), 0) / products.length)
                     : "R 0.00"
                   }
                 </p>
@@ -992,7 +995,7 @@ function ProductsManagement() {
                         </div>
                       </td>
                       <td className="p-4">
-                        <span className="font-medium">{formatPrice(product.price)}</span>
+                        <span className="font-medium">{formatPrice(parseFloat(product.price) || 0)}</span>
                       </td>
                       <td className="p-4">
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
