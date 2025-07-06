@@ -22,8 +22,7 @@ export const tenants = pgTable("tenants", {
   whatsappPhone: text("whatsapp_phone"), // WhatsApp number for order notifications
   // Delivery options
   deliveryOptions: text("delivery_options").array().default(["collection"]), // collection, pudo, standard_delivery
-  // Pudo settings
-  pudoApiKey: text("pudo_api_key"),
+  // Pudo settings (API key is now centralized)
   pudoCollectionAddress: json("pudo_collection_address"), // vendor's collection address for Pudo
   pudoPreferredLocker: text("pudo_preferred_locker"), // preferred Pudo locker location
 });

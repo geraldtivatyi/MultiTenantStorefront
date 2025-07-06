@@ -47,8 +47,19 @@ interface PudoDimensions {
 
 export class PudoService {
   private readonly baseUrl = 'https://sandbox.api-pudo.co.za/api/v1';
+  private readonly apiKey = process.env.PUDO_API_KEY;
+
+  constructor() {
+    if (!this.apiKey) {
+      console.warn('PUDO_API_KEY environment variable not set');
+    }
+  }
 
   private async makeRequest(endpoint: string, options: RequestInit = {}): Promise<any> {
+    if (!this.apiKey) {
+      throw new Error('Pudo API key not configured');
+    }
+
     const url = `${this.baseUrl}${endpoint}`;
     
     const response = await fetch(url, {
@@ -56,6 +67,7 @@ export class PudoService {
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
+        'Authorization': `Bearer ${this.apiKey}`,
         ...options.headers,
       },
     });
@@ -67,13 +79,9 @@ export class PudoService {
     return response.json();
   }
 
-  async getLockers(apiKey: string): Promise<PudoLocker[]> {
+  async getLockers(): Promise<PudoLocker[]> {
     try {
-      const response = await this.makeRequest('/lockers-data', {
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-        },
-      });
+      const response = await this.makeRequest('/lockers-data');
       return response.lockers || [];
     } catch (error) {
       console.error('Error fetching Pudo lockers:', error);
@@ -81,13 +89,9 @@ export class PudoService {
     }
   }
 
-  async getLockerRates(apiKey: string): Promise<PudoRate[]> {
+  async getLockerRates(): Promise<PudoRate[]> {
     try {
-      const response = await this.makeRequest('/locker-rates', {
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-        },
-      });
+      const response = await this.makeRequest('/locker-rates');
       return response.rates || [];
     } catch (error) {
       console.error('Error fetching Pudo rates:', error);
@@ -96,7 +100,6 @@ export class PudoService {
   }
 
   async calculateShippingRate(
-    apiKey: string,
     collectionAddress: PudoAddress,
     deliveryLocker: string,
     dimensions: PudoDimensions,
@@ -105,7 +108,7 @@ export class PudoService {
     try {
       // This would use the Pudo rates API to calculate actual shipping costs
       // For now, we'll return a calculated rate based on dimensions and distance
-      const rates = await this.getLockerRates(apiKey);
+      const rates = await this.getLockerRates();
       
       // Calculate volume in cubic centimeters
       const volume = dimensions.length * dimensions.width * dimensions.height;
@@ -137,9 +140,9 @@ export class PudoService {
     }
   }
 
-  async validatePudoCredentials(apiKey: string): Promise<boolean> {
+  async validatePudoCredentials(): Promise<boolean> {
     try {
-      await this.getLockers(apiKey);
+      await this.getLockers();
       return true;
     } catch (error) {
       console.error('Pudo API validation failed:', error);

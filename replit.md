@@ -187,3 +187,11 @@ Preferred communication style: Simple, everyday language.
   - Enhanced tenant schema with business type, description, address, and owner contact details
   - Store owners automatically get tenant_owner role and access to vendor dashboard
   - Admin can manage all stores from centralized interface with easy editing and store visiting capabilities
+- July 6, 2025: Centralized Pudo API key management for simplified vendor experience:
+  - Removed vendor-specific Pudo API key field from tenant configuration 
+  - Implemented centralized PUDO_API_KEY environment variable for all stores
+  - Updated Pudo service to use single API key instead of per-vendor keys
+  - Modified vendor dashboard to remove API key input field with informative message
+  - Simplified delivery configuration - vendors only need to set collection address and preferred locker
+  - All Pudo functionality (locker fetching, rate calculation) now works seamlessly for all vendors
+  - Enhanced checkout flow with delivery method selection and dynamic pricing remains functional

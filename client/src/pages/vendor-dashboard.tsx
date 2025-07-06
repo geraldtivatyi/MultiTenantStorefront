@@ -31,7 +31,6 @@ export function VendorDashboard() {
   
   // Delivery settings state
   const [deliveryOptions, setDeliveryOptions] = useState<string[]>(["collection"]);
-  const [pudoApiKey, setPudoApiKey] = useState("");
   const [pudoCollectionAddress, setPudoCollectionAddress] = useState("");
   const [pudoPreferredLocker, setPudoPreferredLocker] = useState("");
   
@@ -52,7 +51,6 @@ export function VendorDashboard() {
       const t = tenant as any;
       if (t.whatsappPhone) setWhatsappPhone(t.whatsappPhone);
       if (t.deliveryOptions) setDeliveryOptions(t.deliveryOptions);
-      if (t.pudoApiKey) setPudoApiKey(t.pudoApiKey);
       if (t.pudoCollectionAddress) setPudoCollectionAddress(t.pudoCollectionAddress);
       if (t.pudoPreferredLocker) setPudoPreferredLocker(t.pudoPreferredLocker);
     }
@@ -429,18 +427,9 @@ export function VendorDashboard() {
                       <p className="text-muted-foreground">Configure your Pudo delivery settings</p>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      <div>
-                        <Label htmlFor="pudoApiKey">Pudo API Key</Label>
-                        <Input
-                          id="pudoApiKey"
-                          type="password"
-                          value={pudoApiKey}
-                          onChange={(e) => setPudoApiKey(e.target.value)}
-                          placeholder="Enter your Pudo API key"
-                          className="mt-1"
-                        />
-                        <p className="text-sm text-muted-foreground mt-1">
-                          Get your API key from <a href="https://sandbox.pudo.co.za" target="_blank" rel="noopener noreferrer" className="text-primary-brand hover:underline">sandbox.pudo.co.za</a>
+                      <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-4">
+                        <p className="text-sm text-blue-800">
+                          <strong>Note:</strong> Pudo delivery service is centrally configured for all stores. You just need to set up your collection address and preferred locker below.
                         </p>
                       </div>
 
@@ -482,7 +471,6 @@ export function VendorDashboard() {
                     onClick={() => {
                       updateDeliveryMutation.mutate({
                         deliveryOptions,
-                        pudoApiKey: pudoApiKey || undefined,
                         pudoCollectionAddress: pudoCollectionAddress || undefined,
                         pudoPreferredLocker: pudoPreferredLocker || undefined,
                       });

@@ -1009,7 +1009,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Update tenant delivery options and Pudo settings
   app.put('/api/tenant/delivery', requireAuth, requireTenantOwner, async (req: AuthenticatedRequest, res) => {
     try {
-      const { deliveryOptions, pudoApiKey, pudoCollectionAddress, pudoPreferredLocker } = req.body;
+      const { deliveryOptions, pudoCollectionAddress, pudoPreferredLocker } = req.body;
       const userId = req.user!.id;
       
       // Get user's tenant
@@ -1018,16 +1018,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'User not associated with a tenant' });
       }
 
-      // Validate Pudo API key if provided
-      if (pudoApiKey && deliveryOptions?.includes('pudo')) {
-        const isValid = await pudoService.validatePudoCredentials(pudoApiKey);
+      // Validate Pudo API if pudo delivery is enabled
+      if (deliveryOptions?.includes('pudo')) {
+        const isValid = await pudoService.validatePudoCredentials();
         if (!isValid) {
-          return res.status(400).json({ error: 'Invalid Pudo API key' });
+          return res.status(400).json({ error: 'Pudo API not configured properly' });
         }
       }
 
       const updateData: any = { deliveryOptions };
-      if (pudoApiKey !== undefined) updateData.pudoApiKey = pudoApiKey;
       if (pudoCollectionAddress !== undefined) updateData.pudoCollectionAddress = pudoCollectionAddress;
       if (pudoPreferredLocker !== undefined) updateData.pudoPreferredLocker = pudoPreferredLocker;
 
@@ -1053,12 +1052,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'User not associated with a tenant' });
       }
 
-      const tenant = await storage.getTenant(user.tenantId);
-      if (!tenant?.pudoApiKey) {
-        return res.status(400).json({ error: 'Pudo API key not configured' });
-      }
-
-      const lockers = await pudoService.getLockers(tenant.pudoApiKey);
+      const lockers = await pudoService.getLockers();
       res.json(lockers);
     } catch (error) {
       console.error('Error fetching Pudo lockers:', error);
@@ -1076,12 +1070,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'User not associated with a tenant' });
       }
 
-      const tenant = await storage.getTenant(user.tenantId);
-      if (!tenant?.pudoApiKey) {
-        return res.status(400).json({ error: 'Pudo API key not configured' });
-      }
-
-      const rates = await pudoService.getLockerRates(tenant.pudoApiKey);
+      const rates = await pudoService.getLockerRates();
       res.json(rates);
     } catch (error) {
       console.error('Error fetching Pudo rates:', error);
@@ -1121,7 +1110,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const weight = parseFloat(product.pudoWeight.toString());
 
         const shipping = await pudoService.calculateShippingRate(
-          req.tenant.pudoApiKey,
           req.tenant.pudoCollectionAddress as any,
           deliveryLocker,
           dimensions,
