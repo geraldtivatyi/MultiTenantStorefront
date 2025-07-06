@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -41,6 +41,7 @@ export function Checkout() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedDeliveryMethod, setSelectedDeliveryMethod] = useState<string>("collection");
   const [pudoLockers, setPudoLockers] = useState<any[]>([]);
+  const [lockerSearchTerm, setLockerSearchTerm] = useState("");
   const [shippingCost, setShippingCost] = useState(0);
   const [isCalculatingShipping, setIsCalculatingShipping] = useState(false);
   
@@ -88,6 +89,59 @@ export function Checkout() {
     // Reset shipping cost when delivery method changes
     setShippingCost(0);
   }, [form.watch("deliveryMethod")]);
+
+  // Process and sort lockers based on customer city and search term
+  const processedLockers = React.useMemo(() => {
+    if (!pudoLockers || !Array.isArray(pudoLockers)) return [];
+    
+    let filteredLockers = pudoLockers.filter((locker: any) => 
+      locker.id && locker.id.trim() !== ''
+    );
+
+    // Apply search filter
+    if (lockerSearchTerm.trim()) {
+      const searchLower = lockerSearchTerm.toLowerCase();
+      filteredLockers = filteredLockers.filter((locker: any) =>
+        locker.name?.toLowerCase().includes(searchLower) ||
+        locker.address?.toLowerCase().includes(searchLower) ||
+        locker.city?.toLowerCase().includes(searchLower) ||
+        locker.province?.toLowerCase().includes(searchLower)
+      );
+    }
+
+    // Sort by proximity to customer's city
+    const customerCity = form.watch("city")?.trim().toLowerCase();
+    if (customerCity) {
+      filteredLockers.sort((a: any, b: any) => {
+        const aCity = a.city?.toLowerCase() || '';
+        const bCity = b.city?.toLowerCase() || '';
+        
+        // Exact city match first
+        const aExactMatch = aCity === customerCity;
+        const bExactMatch = bCity === customerCity;
+        
+        if (aExactMatch && !bExactMatch) return -1;
+        if (!aExactMatch && bExactMatch) return 1;
+        
+        // Partial city match second
+        const aPartialMatch = aCity.includes(customerCity) || customerCity.includes(aCity);
+        const bPartialMatch = bCity.includes(customerCity) || customerCity.includes(bCity);
+        
+        if (aPartialMatch && !bPartialMatch) return -1;
+        if (!aPartialMatch && bPartialMatch) return 1;
+        
+        // Then sort alphabetically by name
+        return (a.name || '').localeCompare(b.name || '');
+      });
+    } else {
+      // If no customer city, just sort alphabetically by name
+      filteredLockers.sort((a: any, b: any) => 
+        (a.name || '').localeCompare(b.name || '')
+      );
+    }
+
+    return filteredLockers;
+  }, [pudoLockers, lockerSearchTerm, form.watch("city")]);
 
   // Calculate shipping when Pudo locker is selected
   useEffect(() => {
@@ -405,21 +459,68 @@ export function Checkout() {
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Select Pudo Locker</FormLabel>
+                              
+                              {/* Search input */}
+                              <div className="mt-1 mb-2">
+                                <Input
+                                  placeholder="Search by locker name, address, or city..."
+                                  value={lockerSearchTerm}
+                                  onChange={(e) => setLockerSearchTerm(e.target.value)}
+                                  className="text-sm"
+                                />
+                                {lockerSearchTerm && (
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                    Showing {processedLockers.length} result{processedLockers.length !== 1 ? 's' : ''}
+                                  </p>
+                                )}
+                              </div>
+
                               <FormControl>
                                 <Select value={field.value} onValueChange={field.onChange}>
                                   <SelectTrigger>
                                     <SelectValue placeholder="Choose a locker location" />
                                   </SelectTrigger>
-                                  <SelectContent>
-                                    {pudoLockers.map((locker) => (
-                                      <SelectItem key={locker.id} value={locker.id}>
-                                        {locker.name} - {locker.address}
+                                  <SelectContent className="max-h-80">
+                                    {processedLockers.length > 0 ? (
+                                      <>
+                                        {form.watch("city") && !lockerSearchTerm && (
+                                          <div className="px-2 py-1 text-xs font-medium text-muted-foreground bg-muted/50 sticky top-0">
+                                            Lockers in {form.watch("city")} shown first
+                                          </div>
+                                        )}
+                                        {processedLockers.map((locker: any) => (
+                                          <SelectItem key={locker.id} value={locker.id}>
+                                            <div>
+                                              <div className="font-medium">{locker.name}</div>
+                                              <div className="text-sm text-muted-foreground">
+                                                {locker.city}, {locker.province}
+                                              </div>
+                                              <div className="text-xs text-muted-foreground truncate max-w-80">
+                                                {locker.address}
+                                              </div>
+                                            </div>
+                                          </SelectItem>
+                                        ))}
+                                      </>
+                                    ) : lockerSearchTerm ? (
+                                      <SelectItem value="no-results" disabled>
+                                        No lockers found matching "{lockerSearchTerm}"
                                       </SelectItem>
-                                    ))}
+                                    ) : (
+                                      <SelectItem value="loading-lockers" disabled>
+                                        Loading locker locations...
+                                      </SelectItem>
+                                    )}
                                   </SelectContent>
                                 </Select>
                               </FormControl>
                               <FormMessage />
+                              
+                              {form.watch("city") && !lockerSearchTerm && (
+                                <p className="text-sm text-muted-foreground mt-1">
+                                  Lockers in your city are shown first. Use the search to find specific locations.
+                                </p>
+                              )}
                             </FormItem>
                           )}
                         />
