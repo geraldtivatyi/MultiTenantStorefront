@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,7 @@ export function VendorDashboard() {
   // Delivery settings state
   const [deliveryOptions, setDeliveryOptions] = useState<string[]>(["collection"]);
   const [pudoPreferredLocker, setPudoPreferredLocker] = useState("");
+  const [lockerSearchTerm, setLockerSearchTerm] = useState("");
   
   // Collection address fields
   const [streetAddress, setStreetAddress] = useState("");
@@ -56,6 +57,59 @@ export function VendorDashboard() {
     queryKey: ["/api/pudo/lockers"],
     enabled: activeTab === "delivery",
   });
+
+  // Process and sort lockers based on collection city and search term
+  const processedLockers = React.useMemo(() => {
+    if (!pudoLockers || !Array.isArray(pudoLockers)) return [];
+    
+    let filteredLockers = pudoLockers.filter((locker: any) => 
+      locker.id && locker.id.trim() !== ''
+    );
+
+    // Apply search filter
+    if (lockerSearchTerm.trim()) {
+      const searchLower = lockerSearchTerm.toLowerCase();
+      filteredLockers = filteredLockers.filter((locker: any) =>
+        locker.name?.toLowerCase().includes(searchLower) ||
+        locker.address?.toLowerCase().includes(searchLower) ||
+        locker.city?.toLowerCase().includes(searchLower) ||
+        locker.province?.toLowerCase().includes(searchLower)
+      );
+    }
+
+    // Sort by proximity to collection city
+    const collectionCity = city.trim().toLowerCase();
+    if (collectionCity) {
+      filteredLockers.sort((a: any, b: any) => {
+        const aCity = a.city?.toLowerCase() || '';
+        const bCity = b.city?.toLowerCase() || '';
+        
+        // Exact city match first
+        const aExactMatch = aCity === collectionCity;
+        const bExactMatch = bCity === collectionCity;
+        
+        if (aExactMatch && !bExactMatch) return -1;
+        if (!aExactMatch && bExactMatch) return 1;
+        
+        // Partial city match second
+        const aPartialMatch = aCity.includes(collectionCity) || collectionCity.includes(aCity);
+        const bPartialMatch = bCity.includes(collectionCity) || collectionCity.includes(bCity);
+        
+        if (aPartialMatch && !bPartialMatch) return -1;
+        if (!aPartialMatch && bPartialMatch) return 1;
+        
+        // Then sort alphabetically by name
+        return (a.name || '').localeCompare(b.name || '');
+      });
+    } else {
+      // If no collection city, just sort alphabetically by name
+      filteredLockers.sort((a: any, b: any) => 
+        (a.name || '').localeCompare(b.name || '')
+      );
+    }
+
+    return filteredLockers;
+  }, [pudoLockers, lockerSearchTerm, city]);
 
   // Initialize settings from tenant data
   useEffect(() => {
@@ -509,22 +563,52 @@ export function VendorDashboard() {
 
                       <div>
                         <Label htmlFor="pudoPreferredLocker">Preferred Locker Location (Optional)</Label>
+                        
+                        {/* Search input */}
+                        <div className="mt-1 mb-2">
+                          <Input
+                            placeholder="Search by locker name, address, or city..."
+                            value={lockerSearchTerm}
+                            onChange={(e) => setLockerSearchTerm(e.target.value)}
+                            className="text-sm"
+                          />
+                          {lockerSearchTerm && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Showing {processedLockers.length} result{processedLockers.length !== 1 ? 's' : ''}
+                            </p>
+                          )}
+                        </div>
+
                         <Select value={pudoPreferredLocker} onValueChange={setPudoPreferredLocker}>
-                          <SelectTrigger className="mt-1">
+                          <SelectTrigger>
                             <SelectValue placeholder="Select a preferred locker location" />
                           </SelectTrigger>
-                          <SelectContent>
-                            {pudoLockers && Array.isArray(pudoLockers) && pudoLockers.length > 0 ? (
-                              pudoLockers
-                                .filter((locker: any) => locker.id && locker.id.trim() !== '')
-                                .map((locker: any) => (
+                          <SelectContent className="max-h-80">
+                            {processedLockers.length > 0 ? (
+                              <>
+                                {city && !lockerSearchTerm && (
+                                  <div className="px-2 py-1 text-xs font-medium text-muted-foreground bg-muted/50 sticky top-0">
+                                    Lockers in {city} shown first
+                                  </div>
+                                )}
+                                {processedLockers.map((locker: any) => (
                                   <SelectItem key={locker.id} value={locker.id}>
                                     <div>
                                       <div className="font-medium">{locker.name}</div>
-                                      <div className="text-sm text-muted-foreground">{locker.address}</div>
+                                      <div className="text-sm text-muted-foreground">
+                                        {locker.city}, {locker.province}
+                                      </div>
+                                      <div className="text-xs text-muted-foreground truncate max-w-80">
+                                        {locker.address}
+                                      </div>
                                     </div>
                                   </SelectItem>
-                                ))
+                                ))}
+                              </>
+                            ) : lockerSearchTerm ? (
+                              <SelectItem value="no-results" disabled>
+                                No lockers found matching "{lockerSearchTerm}"
+                              </SelectItem>
                             ) : (
                               <SelectItem value="loading-lockers" disabled>
                                 Loading locker locations...
@@ -533,7 +617,8 @@ export function VendorDashboard() {
                           </SelectContent>
                         </Select>
                         <p className="text-sm text-muted-foreground mt-1">
-                          Default Pudo locker for your shipments. Customers can still choose a different locker at checkout.
+                          Default Pudo locker for your shipments. {city && 'Lockers in your city are shown first. '}
+                          Customers can still choose a different locker at checkout.
                         </p>
                       </div>
                     </CardContent>
