@@ -515,16 +515,18 @@ export function VendorDashboard() {
                           </SelectTrigger>
                           <SelectContent>
                             {pudoLockers && Array.isArray(pudoLockers) && pudoLockers.length > 0 ? (
-                              pudoLockers.map((locker: any) => (
-                                <SelectItem key={locker.id} value={locker.id}>
-                                  <div>
-                                    <div className="font-medium">{locker.name}</div>
-                                    <div className="text-sm text-muted-foreground">{locker.address}</div>
-                                  </div>
-                                </SelectItem>
-                              ))
+                              pudoLockers
+                                .filter((locker: any) => locker.id && locker.id.trim() !== '')
+                                .map((locker: any) => (
+                                  <SelectItem key={locker.id} value={locker.id}>
+                                    <div>
+                                      <div className="font-medium">{locker.name}</div>
+                                      <div className="text-sm text-muted-foreground">{locker.address}</div>
+                                    </div>
+                                  </SelectItem>
+                                ))
                             ) : (
-                              <SelectItem value="loading" disabled>
+                              <SelectItem value="loading-lockers" disabled>
                                 Loading locker locations...
                               </SelectItem>
                             )}
