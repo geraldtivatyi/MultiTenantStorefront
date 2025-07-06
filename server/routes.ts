@@ -5,6 +5,7 @@ import { tenantMiddleware, adminBypass, type TenantRequest } from "./middleware/
 import { paystackService, type PaystackWebhookEvent } from "./services/paystack";
 import { whatsappService, type WhatsAppWebhookEvent } from "./services/whatsapp";
 import { emailService } from "./services/email";
+import { pudoService } from "./services/pudo";
 import { 
   AuthService, 
   authMiddleware, 
@@ -472,6 +473,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         subdomain: req.tenant.subdomain,
         heroTitle: req.tenant.heroTitle || `Welcome to ${req.tenant.name}`,
         heroSubtitle: req.tenant.heroSubtitle || 'Discover amazing products',
+        deliveryOptions: req.tenant.deliveryOptions || ["collection"],
+        pudoApiKey: req.tenant.pudoApiKey,
+        pudoCollectionAddress: req.tenant.pudoCollectionAddress,
+        pudoPreferredLocker: req.tenant.pudoPreferredLocker,
       });
     } catch (error) {
       console.error('Get tenant error:', error);
@@ -599,6 +604,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     shippingAddress: z.string().min(1),
     city: z.string().min(1),
     postalCode: z.string().min(1),
+    deliveryMethod: z.enum(["collection", "standard_delivery", "pudo"]),
+    pudoLocker: z.string().optional(),
+    shippingCost: z.number().default(0),
+    totalAmount: z.number().optional(),
   });
 
   app.post('/api/orders/checkout', async (req: TenantRequest, res) => {
@@ -621,15 +630,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         sum + (parseFloat(item.product.price) * item.quantity), 0
       );
       const tax = subtotal * 0.08; // 8% tax
-      const total = subtotal + tax;
+      const shippingCost = checkoutData.shippingCost || 0;
+      const total = subtotal + tax + shippingCost;
 
-      // Create order
+      // Create order with delivery information
       const orderData = insertOrderSchema.parse({
         tenantId: req.tenant.id,
-        ...checkoutData,
+        customerEmail: checkoutData.customerEmail,
+        customerName: checkoutData.customerName,
+        shippingAddress: checkoutData.shippingAddress,
+        city: checkoutData.city,
+        postalCode: checkoutData.postalCode,
         subtotal: subtotal.toFixed(2),
         tax: tax.toFixed(2),
         total: total.toFixed(2),
+        deliveryMethod: checkoutData.deliveryMethod,
+        pudoLocker: checkoutData.pudoLocker,
+        shippingCost: shippingCost.toFixed(2),
       });
 
       const order = await storage.createOrder(orderData);
@@ -986,6 +1003,151 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Update WhatsApp settings error:', error);
       res.status(500).json({ error: 'Failed to update WhatsApp settings' });
+    }
+  });
+
+  // Update tenant delivery options and Pudo settings
+  app.put('/api/tenant/delivery', requireAuth, requireTenantOwner, async (req: AuthenticatedRequest, res) => {
+    try {
+      const { deliveryOptions, pudoApiKey, pudoCollectionAddress, pudoPreferredLocker } = req.body;
+      const userId = req.user!.id;
+      
+      // Get user's tenant
+      const user = await storage.getUser(userId);
+      if (!user || !user.tenantId) {
+        return res.status(400).json({ error: 'User not associated with a tenant' });
+      }
+
+      // Validate Pudo API key if provided
+      if (pudoApiKey && deliveryOptions?.includes('pudo')) {
+        const isValid = await pudoService.validatePudoCredentials(pudoApiKey);
+        if (!isValid) {
+          return res.status(400).json({ error: 'Invalid Pudo API key' });
+        }
+      }
+
+      const updateData: any = { deliveryOptions };
+      if (pudoApiKey !== undefined) updateData.pudoApiKey = pudoApiKey;
+      if (pudoCollectionAddress !== undefined) updateData.pudoCollectionAddress = pudoCollectionAddress;
+      if (pudoPreferredLocker !== undefined) updateData.pudoPreferredLocker = pudoPreferredLocker;
+
+      const tenant = await storage.updateTenant(user.tenantId, updateData);
+      if (!tenant) {
+        return res.status(404).json({ error: 'Tenant not found' });
+      }
+
+      res.json({ success: true, tenant });
+    } catch (error) {
+      console.error('Error updating delivery settings:', error);
+      res.status(500).json({ error: 'Failed to update delivery settings' });
+    }
+  });
+
+  // Get Pudo lockers
+  app.get('/api/pudo/lockers', requireAuth, async (req: AuthenticatedRequest, res) => {
+    try {
+      const userId = req.user!.id;
+      const user = await storage.getUser(userId);
+      
+      if (!user || !user.tenantId) {
+        return res.status(400).json({ error: 'User not associated with a tenant' });
+      }
+
+      const tenant = await storage.getTenant(user.tenantId);
+      if (!tenant?.pudoApiKey) {
+        return res.status(400).json({ error: 'Pudo API key not configured' });
+      }
+
+      const lockers = await pudoService.getLockers(tenant.pudoApiKey);
+      res.json(lockers);
+    } catch (error) {
+      console.error('Error fetching Pudo lockers:', error);
+      res.status(500).json({ error: 'Failed to fetch Pudo lockers' });
+    }
+  });
+
+  // Get Pudo rates
+  app.get('/api/pudo/rates', requireAuth, async (req: AuthenticatedRequest, res) => {
+    try {
+      const userId = req.user!.id;
+      const user = await storage.getUser(userId);
+      
+      if (!user || !user.tenantId) {
+        return res.status(400).json({ error: 'User not associated with a tenant' });
+      }
+
+      const tenant = await storage.getTenant(user.tenantId);
+      if (!tenant?.pudoApiKey) {
+        return res.status(400).json({ error: 'Pudo API key not configured' });
+      }
+
+      const rates = await pudoService.getLockerRates(tenant.pudoApiKey);
+      res.json(rates);
+    } catch (error) {
+      console.error('Error fetching Pudo rates:', error);
+      res.status(500).json({ error: 'Failed to fetch Pudo rates' });
+    }
+  });
+
+  // Calculate Pudo shipping for products in cart
+  app.post('/api/pudo/calculate-shipping', async (req: TenantRequest, res) => {
+    try {
+      const { items, deliveryLocker } = req.body; // items with product IDs and quantities
+      
+      if (!req.tenant) {
+        return res.status(400).json({ error: 'Tenant not found' });
+      }
+
+      if (!req.tenant.pudoApiKey || !req.tenant.pudoCollectionAddress) {
+        return res.status(400).json({ error: 'Pudo not configured for this store' });
+      }
+
+      if (!deliveryLocker) {
+        return res.status(400).json({ error: 'Delivery locker location required' });
+      }
+
+      let totalRate = 0;
+      const shippingDetails = [];
+
+      for (const item of items) {
+        const product = await storage.getProduct(item.productId, req.tenant.id);
+        if (!product || !product.pudoDimensions || !product.pudoWeight) {
+          return res.status(400).json({ 
+            error: `Product "${product?.name || 'Unknown'}" is not configured for Pudo delivery` 
+          });
+        }
+
+        const dimensions = product.pudoDimensions as any;
+        const weight = parseFloat(product.pudoWeight.toString());
+
+        const shipping = await pudoService.calculateShippingRate(
+          req.tenant.pudoApiKey,
+          req.tenant.pudoCollectionAddress as any,
+          deliveryLocker,
+          dimensions,
+          weight * item.quantity
+        );
+
+        totalRate += shipping.rate * item.quantity;
+        shippingDetails.push({
+          productId: item.productId,
+          productName: product.name,
+          quantity: item.quantity,
+          individualRate: shipping.rate,
+          totalRate: shipping.rate * item.quantity,
+          deliveryTime: shipping.delivery_time
+        });
+      }
+
+      res.json({
+        totalRate: parseFloat(totalRate.toFixed(2)),
+        currency: 'ZAR',
+        deliveryTime: '2-3 business days',
+        details: shippingDetails
+      });
+    } catch (error) {
+      console.error('Error calculating Pudo shipping:', error);
+      res.status(500).json({ error: 'Failed to calculate shipping' });
     }
   });
 

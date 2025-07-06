@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, decimal, timestamp, uuid } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, decimal, timestamp, uuid, json } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -20,6 +20,12 @@ export const tenants = pgTable("tenants", {
   heroTitle: text("hero_title"),
   heroSubtitle: text("hero_subtitle"),
   whatsappPhone: text("whatsapp_phone"), // WhatsApp number for order notifications
+  // Delivery options
+  deliveryOptions: text("delivery_options").array().default(["collection"]), // collection, pudo, standard_delivery
+  // Pudo settings
+  pudoApiKey: text("pudo_api_key"),
+  pudoCollectionAddress: json("pudo_collection_address"), // vendor's collection address for Pudo
+  pudoPreferredLocker: text("pudo_preferred_locker"), // preferred Pudo locker location
 });
 
 // Users table
@@ -91,6 +97,10 @@ export const products = pgTable("products", {
   stock: integer("stock").default(0),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
+  // Pudo delivery settings
+  pudoDimensions: json("pudo_dimensions"), // {length: number, width: number, height: number} in cm
+  pudoWeight: decimal("pudo_weight", { precision: 8, scale: 2 }), // weight in kg
+  pudoCustomLocker: text("pudo_custom_locker"), // custom locker location for this product (optional)
 });
 
 // Cart items table
@@ -114,7 +124,10 @@ export const orders = pgTable("orders", {
   postalCode: text("postal_code").notNull(),
   subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull(),
   tax: decimal("tax", { precision: 10, scale: 2 }).notNull(),
+  shippingCost: decimal("shipping_cost", { precision: 10, scale: 2 }).default("0.00"),
   total: decimal("total", { precision: 10, scale: 2 }).notNull(),
+  deliveryMethod: text("delivery_method").default("collection"), // collection, standard_delivery, pudo
+  pudoLocker: text("pudo_locker"), // Pudo locker ID when delivery method is pudo
   status: text("status").notNull().default("pending"), // pending, paid, shipped, delivered, cancelled
   paystackReference: text("paystack_reference"),
   createdAt: timestamp("created_at").defaultNow(),

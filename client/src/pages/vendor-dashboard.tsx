@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { 
@@ -16,15 +18,23 @@ import {
   Users,
   Menu,
   ExternalLink,
-  Settings
+  Settings,
+  Truck
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useTenant } from "@/hooks/use-tenant";
 
 export function VendorDashboard() {
-  const [activeTab, setActiveTab] = useState<"overview" | "products" | "orders" | "analytics" | "settings">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "products" | "orders" | "analytics" | "delivery" | "settings">("overview");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [whatsappPhone, setWhatsappPhone] = useState("");
+  
+  // Delivery settings state
+  const [deliveryOptions, setDeliveryOptions] = useState<string[]>(["collection"]);
+  const [pudoApiKey, setPudoApiKey] = useState("");
+  const [pudoCollectionAddress, setPudoCollectionAddress] = useState("");
+  const [pudoPreferredLocker, setPudoPreferredLocker] = useState("");
+  
   const { user } = useAuth();
   const { data: tenant } = useTenant();
   const { toast } = useToast();
@@ -36,10 +46,15 @@ export function VendorDashboard() {
     enabled: activeTab === "overview",
   });
 
-  // Initialize WhatsApp phone from tenant data
+  // Initialize settings from tenant data
   useEffect(() => {
-    if ((tenant as any)?.whatsappPhone) {
-      setWhatsappPhone((tenant as any).whatsappPhone);
+    if (tenant) {
+      const t = tenant as any;
+      if (t.whatsappPhone) setWhatsappPhone(t.whatsappPhone);
+      if (t.deliveryOptions) setDeliveryOptions(t.deliveryOptions);
+      if (t.pudoApiKey) setPudoApiKey(t.pudoApiKey);
+      if (t.pudoCollectionAddress) setPudoCollectionAddress(t.pudoCollectionAddress);
+      if (t.pudoPreferredLocker) setPudoPreferredLocker(t.pudoPreferredLocker);
     }
   }, [tenant]);
 
@@ -60,6 +75,28 @@ export function VendorDashboard() {
       toast({
         title: "Update failed",
         description: error.message || "Failed to update WhatsApp settings.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Update delivery settings mutation
+  const updateDeliveryMutation = useMutation({
+    mutationFn: async (settings: any) => {
+      const response = await apiRequest("/api/tenant/delivery", "PUT", settings);
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Delivery settings updated",
+        description: "Your delivery options have been saved successfully.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/storefront/tenant"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Update failed",
+        description: error.message || "Failed to update delivery settings.",
         variant: "destructive",
       });
     },
@@ -121,6 +158,17 @@ export function VendorDashboard() {
           >
             <TrendingUp className="mr-3 h-4 w-4" />
             Analytics
+          </button>
+          <button
+            onClick={() => handleTabChange("delivery")}
+            className={`w-full text-left flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors ${
+              activeTab === "delivery"
+                ? "bg-primary-brand text-white"
+                : "text-muted-foreground hover:bg-gray-100"
+            }`}
+          >
+            <Truck className="mr-3 h-4 w-4" />
+            Delivery
           </button>
           <button
             onClick={() => handleTabChange("settings")}
@@ -309,6 +357,141 @@ export function VendorDashboard() {
             {activeTab === "analytics" && (
               <div className="text-center py-8">
                 <p className="text-muted-foreground">Analytics dashboard coming soon...</p>
+              </div>
+            )}
+
+            {activeTab === "delivery" && (
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-2xl font-bold text-foreground">Delivery Settings</h2>
+                  <p className="text-muted-foreground">Configure your delivery options and Pudo settings</p>
+                </div>
+
+                {/* Delivery Options */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Delivery Options</CardTitle>
+                    <p className="text-muted-foreground">Select which delivery methods you want to offer</p>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-3">
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="collection"
+                          checked={deliveryOptions.includes("collection")}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setDeliveryOptions([...deliveryOptions, "collection"]);
+                            } else {
+                              setDeliveryOptions(deliveryOptions.filter(opt => opt !== "collection"));
+                            }
+                          }}
+                        />
+                        <Label htmlFor="collection">Collection - Customers collect from your store</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="standard_delivery"
+                          checked={deliveryOptions.includes("standard_delivery")}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setDeliveryOptions([...deliveryOptions, "standard_delivery"]);
+                            } else {
+                              setDeliveryOptions(deliveryOptions.filter(opt => opt !== "standard_delivery"));
+                            }
+                          }}
+                        />
+                        <Label htmlFor="standard_delivery">Standard Delivery - Direct to customer</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="pudo"
+                          checked={deliveryOptions.includes("pudo")}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setDeliveryOptions([...deliveryOptions, "pudo"]);
+                            } else {
+                              setDeliveryOptions(deliveryOptions.filter(opt => opt !== "pudo"));
+                            }
+                          }}
+                        />
+                        <Label htmlFor="pudo">Pudo Locker Delivery - Via Courier Guy lockers</Label>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Pudo Configuration */}
+                {deliveryOptions.includes("pudo") && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Pudo Configuration</CardTitle>
+                      <p className="text-muted-foreground">Configure your Pudo delivery settings</p>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div>
+                        <Label htmlFor="pudoApiKey">Pudo API Key</Label>
+                        <Input
+                          id="pudoApiKey"
+                          type="password"
+                          value={pudoApiKey}
+                          onChange={(e) => setPudoApiKey(e.target.value)}
+                          placeholder="Enter your Pudo API key"
+                          className="mt-1"
+                        />
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Get your API key from <a href="https://sandbox.pudo.co.za" target="_blank" rel="noopener noreferrer" className="text-primary-brand hover:underline">sandbox.pudo.co.za</a>
+                        </p>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="pudoCollectionAddress">Collection Address</Label>
+                        <Textarea
+                          id="pudoCollectionAddress"
+                          value={pudoCollectionAddress}
+                          onChange={(e) => setPudoCollectionAddress(e.target.value)}
+                          placeholder="Enter your full collection address (JSON format)"
+                          className="mt-1"
+                          rows={4}
+                        />
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Address where Courier Guy will collect items from your store
+                        </p>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="pudoPreferredLocker">Preferred Locker Location (Optional)</Label>
+                        <Input
+                          id="pudoPreferredLocker"
+                          value={pudoPreferredLocker}
+                          onChange={(e) => setPudoPreferredLocker(e.target.value)}
+                          placeholder="Default locker location ID"
+                          className="mt-1"
+                        />
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Default Pudo locker for your shipments
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Save Button */}
+                <div className="flex justify-end">
+                  <Button
+                    onClick={() => {
+                      updateDeliveryMutation.mutate({
+                        deliveryOptions,
+                        pudoApiKey: pudoApiKey || undefined,
+                        pudoCollectionAddress: pudoCollectionAddress || undefined,
+                        pudoPreferredLocker: pudoPreferredLocker || undefined,
+                      });
+                    }}
+                    disabled={updateDeliveryMutation.isPending}
+                  >
+                    {updateDeliveryMutation.isPending ? "Saving..." : "Save Delivery Settings"}
+                  </Button>
+                </div>
               </div>
             )}
 

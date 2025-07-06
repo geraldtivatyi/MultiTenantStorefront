@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
@@ -11,7 +11,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCart } from "@/hooks/use-cart";
+import { useTenant } from "@/hooks/use-tenant";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { calculateCartTotal, formatPrice } from "@/lib/utils";
@@ -24,6 +26,10 @@ const checkoutSchema = z.object({
   shippingAddress: z.string().min(1, "Address is required"),
   city: z.string().min(1, "City is required"),
   postalCode: z.string().min(1, "Postal code is required"),
+  deliveryMethod: z.enum(["collection", "standard_delivery", "pudo"], {
+    required_error: "Please select a delivery method",
+  }),
+  pudoLocker: z.string().optional(), // Required when delivery method is pudo
   paymentMethod: z.enum(["card", "bank", "ussd"], {
     required_error: "Please select a payment method",
   }),
@@ -33,9 +39,18 @@ type CheckoutFormData = z.infer<typeof checkoutSchema>;
 
 export function Checkout() {
   const [isProcessing, setIsProcessing] = useState(false);
+  const [selectedDeliveryMethod, setSelectedDeliveryMethod] = useState<string>("collection");
+  const [pudoLockers, setPudoLockers] = useState<any[]>([]);
+  const [shippingCost, setShippingCost] = useState(0);
+  const [isCalculatingShipping, setIsCalculatingShipping] = useState(false);
+  
   const { cartItems, isLoading: cartLoading } = useCart();
+  const { data: tenant } = useTenant();
   const { toast } = useToast();
   const { subtotal, tax, total } = calculateCartTotal(cartItems);
+  
+  // Calculate total with shipping
+  const finalTotal = total + shippingCost;
 
   const form = useForm<CheckoutFormData>({
     resolver: zodResolver(checkoutSchema),
@@ -45,9 +60,70 @@ export function Checkout() {
       shippingAddress: "",
       city: "",
       postalCode: "",
+      deliveryMethod: "collection",
+      pudoLocker: "",
       paymentMethod: "card",
     },
   });
+
+  // Handle delivery method changes
+  useEffect(() => {
+    const deliveryMethod = form.watch("deliveryMethod");
+    setSelectedDeliveryMethod(deliveryMethod);
+    
+    if (deliveryMethod === "pudo") {
+      // Fetch Pudo lockers when Pudo is selected
+      const fetchPudoLockers = async () => {
+        try {
+          const response = await apiRequest("/api/pudo/lockers", "GET");
+          const data = await response.json();
+          setPudoLockers(data);
+        } catch (error) {
+          console.error("Failed to fetch Pudo lockers:", error);
+        }
+      };
+      fetchPudoLockers();
+    }
+
+    // Reset shipping cost when delivery method changes
+    setShippingCost(0);
+  }, [form.watch("deliveryMethod")]);
+
+  // Calculate shipping when Pudo locker is selected
+  useEffect(() => {
+    const deliveryMethod = form.watch("deliveryMethod");
+    const pudoLocker = form.watch("pudoLocker");
+    
+    if (deliveryMethod === "pudo" && pudoLocker && cartItems.length > 0) {
+      const calculateShipping = async () => {
+        setIsCalculatingShipping(true);
+        try {
+          const items = cartItems.map(item => ({
+            productId: item.product.id,
+            quantity: item.quantity
+          }));
+          
+          const response = await apiRequest("/api/pudo/calculate-shipping", "POST", {
+            items,
+            deliveryLocker: pudoLocker
+          });
+          const data = await response.json();
+          setShippingCost(data.totalRate || 0);
+        } catch (error) {
+          console.error("Failed to calculate shipping:", error);
+          setShippingCost(0);
+        } finally {
+          setIsCalculatingShipping(false);
+        }
+      };
+      calculateShipping();
+    } else if (deliveryMethod === "standard_delivery") {
+      // Set a fixed rate for standard delivery
+      setShippingCost(89.99);
+    } else {
+      setShippingCost(0);
+    }
+  }, [form.watch("pudoLocker"), cartItems]);
 
   const checkoutMutation = useMutation({
     mutationFn: async (data: Omit<CheckoutFormData, "paymentMethod">) => {
@@ -72,14 +148,19 @@ export function Checkout() {
       // Initialize Paystack service
       await paystackService.initialize();
 
-      // Create order
+      // Create order with delivery information
       const { paymentMethod, ...orderData } = data;
-      const result = await checkoutMutation.mutateAsync(orderData);
+      const orderDataWithShipping = {
+        ...orderData,
+        shippingCost,
+        totalAmount: finalTotal,
+      };
+      const result = await checkoutMutation.mutateAsync(orderDataWithShipping);
 
       // Process payment with Paystack
       await paystackService.makePayment({
         email: data.customerEmail,
-        amount: total,
+        amount: finalTotal,
         reference: result.payment.reference,
         onSuccess: (response) => {
           toast({
@@ -251,6 +332,102 @@ export function Checkout() {
                   </CardContent>
                 </Card>
 
+                {/* Delivery Method */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Delivery Method</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <FormField
+                      control={form.control}
+                      name="deliveryMethod"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormControl>
+                            <RadioGroup
+                              onValueChange={field.onChange}
+                              defaultValue={field.value}
+                              className="space-y-4"
+                            >
+                              {tenant?.deliveryOptions?.includes("collection") && (
+                                <div className="flex items-center space-x-3 p-4 border border-primary-brand rounded-lg bg-primary-brand/5">
+                                  <RadioGroupItem value="collection" id="collection" />
+                                  <div className="flex-1">
+                                    <label htmlFor="collection" className="font-medium cursor-pointer block">
+                                      Collection - Free
+                                    </label>
+                                    <p className="text-sm text-muted-foreground">Collect from store</p>
+                                  </div>
+                                  <span className="text-sm font-semibold text-secondary-brand">R0.00</span>
+                                </div>
+                              )}
+                              
+                              {tenant?.deliveryOptions?.includes("standard_delivery") && (
+                                <div className="flex items-center space-x-3 p-4 border border-gray-300 rounded-lg">
+                                  <RadioGroupItem value="standard_delivery" id="standard_delivery" />
+                                  <div className="flex-1">
+                                    <label htmlFor="standard_delivery" className="font-medium cursor-pointer block">
+                                      Standard Delivery
+                                    </label>
+                                    <p className="text-sm text-muted-foreground">Direct to your address</p>
+                                  </div>
+                                  <span className="text-sm font-semibold text-secondary-brand">R89.99</span>
+                                </div>
+                              )}
+
+                              {tenant?.deliveryOptions?.includes("pudo") && (
+                                <div className="flex items-center space-x-3 p-4 border border-gray-300 rounded-lg">
+                                  <RadioGroupItem value="pudo" id="pudo" />
+                                  <div className="flex-1">
+                                    <label htmlFor="pudo" className="font-medium cursor-pointer block">
+                                      Pudo Locker Delivery
+                                    </label>
+                                    <p className="text-sm text-muted-foreground">Via Courier Guy lockers</p>
+                                  </div>
+                                  <span className="text-sm font-semibold text-secondary-brand">
+                                    {isCalculatingShipping ? "Calculating..." : formatPrice(shippingCost)}
+                                  </span>
+                                </div>
+                              )}
+                            </RadioGroup>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    {/* Pudo Locker Selection */}
+                    {selectedDeliveryMethod === "pudo" && (
+                      <div className="mt-4">
+                        <FormField
+                          control={form.control}
+                          name="pudoLocker"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Select Pudo Locker</FormLabel>
+                              <FormControl>
+                                <Select value={field.value} onValueChange={field.onChange}>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Choose a locker location" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {pudoLockers.map((locker) => (
+                                      <SelectItem key={locker.id} value={locker.id}>
+                                        {locker.name} - {locker.address}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
                 {/* Payment Information */}
                 <Card>
                   <CardHeader>
@@ -310,7 +487,7 @@ export function Checkout() {
                       disabled={isProcessing || checkoutMutation.isPending}
                       size="lg"
                     >
-                      {isProcessing ? "Processing..." : `Pay ${formatPrice(total)}`}
+                      {isProcessing ? "Processing..." : `Pay ${formatPrice(finalTotal)}`}
                     </Button>
 
                     <p className="text-xs text-muted-foreground text-center mt-4">
@@ -358,7 +535,9 @@ export function Checkout() {
                   </div>
                   <div className="flex justify-between">
                     <span>Shipping</span>
-                    <span className="text-secondary-brand">Free</span>
+                    <span className={shippingCost === 0 ? "text-secondary-brand" : ""}>
+                      {shippingCost === 0 ? "Free" : formatPrice(shippingCost)}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span>Tax</span>
@@ -367,7 +546,7 @@ export function Checkout() {
                   <div className="border-t pt-2 mt-3">
                     <div className="flex justify-between text-lg font-bold">
                       <span>Total</span>
-                      <span className="text-primary-brand">{formatPrice(total)}</span>
+                      <span className="text-primary-brand">{formatPrice(finalTotal)}</span>
                     </div>
                   </div>
                 </div>

@@ -7,6 +7,10 @@ interface TenantInfo {
   subdomain: string;
   heroTitle: string;
   heroSubtitle: string;
+  deliveryOptions?: string[];
+  pudoApiKey?: string;
+  pudoCollectionAddress?: any;
+  pudoPreferredLocker?: string;
 }
 
 export function useTenant() {
