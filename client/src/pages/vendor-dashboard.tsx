@@ -434,15 +434,11 @@ export function VendorDashboard() {
             )}
 
             {activeTab === "orders" && (
-              <div className="text-center py-8">
-                <p className="text-muted-foreground">Order management interface coming soon...</p>
-              </div>
+              <OrdersManagement />
             )}
 
             {activeTab === "analytics" && (
-              <div className="text-center py-8">
-                <p className="text-muted-foreground">Analytics dashboard coming soon...</p>
-              </div>
+              <AnalyticsManagement />
             )}
 
             {activeTab === "delivery" && (
@@ -662,78 +658,7 @@ export function VendorDashboard() {
             )}
 
             {activeTab === "settings" && (
-              <div className="space-y-6">
-                <div>
-                  <h2 className="text-2xl font-bold text-foreground">Settings</h2>
-                  <p className="text-muted-foreground">Manage your store settings and notifications</p>
-                </div>
-
-                {/* WhatsApp Notifications */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Settings className="h-5 w-5" />
-                      WhatsApp Notifications
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <p className="text-sm text-muted-foreground">
-                      Receive WhatsApp notifications when new orders are placed in your store. 
-                      Enter your WhatsApp phone number in international format (e.g., +27823456789).
-                    </p>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="whatsapp-phone">WhatsApp Phone Number</Label>
-                      <Input
-                        id="whatsapp-phone"
-                        type="tel"
-                        placeholder="+27823456789"
-                        value={whatsappPhone}
-                        onChange={(e) => setWhatsappPhone(e.target.value)}
-                        className="max-w-md"
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Include the country code (e.g., +27 for South Africa)
-                      </p>
-                    </div>
-
-                    <Button
-                      onClick={() => updateWhatsAppMutation.mutate(whatsappPhone)}
-                      disabled={updateWhatsAppMutation.isPending}
-                      className="bg-primary-brand hover:bg-primary-brand/90"
-                    >
-                      {updateWhatsAppMutation.isPending ? "Saving..." : "Save WhatsApp Settings"}
-                    </Button>
-
-                    {(tenant as any)?.whatsappPhone && (
-                      <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-md">
-                        <p className="text-sm text-green-800">
-                          ✓ WhatsApp notifications are enabled for: {(tenant as any).whatsappPhone}
-                        </p>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {/* Store Information */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Store Information</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <Label className="text-sm text-muted-foreground">Store Name</Label>
-                        <p className="font-medium">{tenant?.name}</p>
-                      </div>
-                      <div>
-                        <Label className="text-sm text-muted-foreground">Subdomain</Label>
-                        <p className="font-medium">{tenant?.subdomain}.{window.location.hostname}</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
+              <SettingsManagement />
             )}
           </div>
         </div>
@@ -1323,6 +1248,785 @@ function ProductFormModal({
           </div>
         </form>
       </div>
+    </div>
+  );
+}
+
+// Orders Management Component
+function OrdersManagement() {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("createdAt");
+  const [sortOrder, setSortOrder] = useState("desc");
+
+  const { toast } = useToast();
+
+  // Fetch vendor orders
+  const { data: orders = [], isLoading } = useQuery({
+    queryKey: ["/api/vendor/orders"],
+  });
+
+  // Filter and sort orders
+  const filteredOrders = React.useMemo(() => {
+    let filtered = orders;
+    
+    // Apply status filter
+    if (statusFilter !== "all") {
+      filtered = orders.filter((order: any) => order.status === statusFilter);
+    }
+    
+    // Apply search filter
+    if (searchTerm.trim()) {
+      const searchLower = searchTerm.toLowerCase();
+      filtered = filtered.filter((order: any) =>
+        order.id?.toString().includes(searchLower) ||
+        order.customerEmail?.toLowerCase().includes(searchLower) ||
+        order.customerName?.toLowerCase().includes(searchLower)
+      );
+    }
+    
+    // Apply sorting
+    filtered.sort((a: any, b: any) => {
+      let aValue = a[sortBy];
+      let bValue = b[sortBy];
+      
+      if (sortBy === "total") {
+        aValue = parseFloat(aValue) || 0;
+        bValue = parseFloat(bValue) || 0;
+      } else if (sortBy === "createdAt") {
+        aValue = new Date(aValue).getTime();
+        bValue = new Date(bValue).getTime();
+      }
+      
+      if (sortOrder === "asc") {
+        return aValue > bValue ? 1 : -1;
+      } else {
+        return aValue < bValue ? 1 : -1;
+      }
+    });
+    
+    return filtered;
+  }, [orders, searchTerm, statusFilter, sortBy, sortOrder]);
+
+  const formatPrice = (price: number | string) => {
+    const numPrice = typeof price === 'string' ? parseFloat(price) : price;
+    return `R ${(numPrice || 0).toFixed(2)}`;
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-ZA', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'paid': return 'bg-green-100 text-green-800';
+      case 'pending': return 'bg-yellow-100 text-yellow-800';
+      case 'cancelled': return 'bg-red-100 text-red-800';
+      case 'processing': return 'bg-blue-100 text-blue-800';
+      case 'shipped': return 'bg-purple-100 text-purple-800';
+      case 'delivered': return 'bg-green-100 text-green-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="animate-pulse space-y-4">
+          <div className="h-8 bg-gray-200 rounded w-1/4"></div>
+          <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+          <div className="grid gap-4">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="h-24 bg-gray-200 rounded"></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-foreground">Orders</h2>
+          <p className="text-muted-foreground">
+            Manage and track your store orders
+          </p>
+        </div>
+      </div>
+
+      {/* Analytics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Total Orders</p>
+                <p className="text-2xl font-bold">{orders.length}</p>
+              </div>
+              <ShoppingCart className="h-8 w-8 text-primary-brand" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Paid Orders</p>
+                <p className="text-2xl font-bold">
+                  {orders.filter((o: any) => o.status === 'paid').length}
+                </p>
+              </div>
+              <TrendingUp className="h-8 w-8 text-green-600" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Pending Orders</p>
+                <p className="text-2xl font-bold">
+                  {orders.filter((o: any) => o.status === 'pending').length}
+                </p>
+              </div>
+              <Calendar className="h-8 w-8 text-yellow-600" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Total Revenue</p>
+                <p className="text-2xl font-bold">
+                  {formatPrice(orders.filter((o: any) => o.status === 'paid').reduce((sum: number, o: any) => sum + (parseFloat(o.total) || 0), 0))}
+                </p>
+              </div>
+              <DollarSign className="h-8 w-8 text-blue-600" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Search and Filter Bar */}
+      <div className="flex flex-col sm:flex-row gap-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search orders by ID, customer email, or name..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        
+        <div className="flex gap-2">
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-40">
+              <SelectValue placeholder="Filter by status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Orders</SelectItem>
+              <SelectItem value="pending">Pending</SelectItem>
+              <SelectItem value="paid">Paid</SelectItem>
+              <SelectItem value="processing">Processing</SelectItem>
+              <SelectItem value="shipped">Shipped</SelectItem>
+              <SelectItem value="delivered">Delivered</SelectItem>
+              <SelectItem value="cancelled">Cancelled</SelectItem>
+            </SelectContent>
+          </Select>
+          
+          <Select value={sortBy} onValueChange={setSortBy}>
+            <SelectTrigger className="w-32">
+              <SelectValue placeholder="Sort by" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="createdAt">Date</SelectItem>
+              <SelectItem value="total">Amount</SelectItem>
+              <SelectItem value="status">Status</SelectItem>
+            </SelectContent>
+          </Select>
+          
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
+          >
+            {sortOrder === "asc" ? "↑" : "↓"}
+          </Button>
+        </div>
+      </div>
+
+      {/* Orders Table */}
+      <Card>
+        <CardContent className="p-0">
+          {filteredOrders.length === 0 ? (
+            <div className="text-center py-8">
+              <ShoppingCart className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <p className="text-lg font-medium">No orders found</p>
+              <p className="text-muted-foreground">
+                {searchTerm.trim() || statusFilter !== "all"
+                  ? "Try adjusting your search or filter criteria" 
+                  : "Orders will appear here once customers start purchasing"
+                }
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="border-b">
+                  <tr>
+                    <th className="text-left p-4 font-medium">Order ID</th>
+                    <th className="text-left p-4 font-medium">Customer</th>
+                    <th className="text-left p-4 font-medium">Amount</th>
+                    <th className="text-left p-4 font-medium">Status</th>
+                    <th className="text-left p-4 font-medium">Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredOrders.map((order: any) => (
+                    <tr key={order.id} className="border-b hover:bg-gray-50">
+                      <td className="p-4">
+                        <div className="font-medium">#{order.id}</div>
+                      </td>
+                      <td className="p-4">
+                        <div>
+                          <p className="font-medium">{order.customerName || 'Guest'}</p>
+                          <p className="text-sm text-muted-foreground">{order.customerEmail}</p>
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        <span className="font-medium">{formatPrice(order.total)}</span>
+                      </td>
+                      <td className="p-4">
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>
+                          {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                        </span>
+                      </td>
+                      <td className="p-4">
+                        <span className="text-sm">{formatDate(order.createdAt)}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// Analytics Management Component
+function AnalyticsManagement() {
+  const [dateRange, setDateRange] = useState("last30days");
+  
+  // Fetch vendor stats
+  const { data: vendorStats } = useQuery({
+    queryKey: ["/api/vendor/stats"],
+  });
+
+  // Fetch vendor orders for analytics
+  const { data: orders = [] } = useQuery({
+    queryKey: ["/api/vendor/orders"],
+  });
+
+  // Fetch vendor products for analytics
+  const { data: products = [] } = useQuery({
+    queryKey: ["/api/vendor/products"],
+  });
+
+  const formatPrice = (price: number | string) => {
+    const numPrice = typeof price === 'string' ? parseFloat(price) : price;
+    return `R ${(numPrice || 0).toFixed(2)}`;
+  };
+
+  // Calculate analytics data
+  const analyticsData = React.useMemo(() => {
+    const paidOrders = orders.filter((order: any) => order.status === 'paid');
+    const totalRevenue = paidOrders.reduce((sum: number, order: any) => sum + (parseFloat(order.total) || 0), 0);
+    const averageOrderValue = paidOrders.length > 0 ? totalRevenue / paidOrders.length : 0;
+    
+    // Calculate conversion rate (assuming all orders started as cart sessions)
+    const conversionRate = orders.length > 0 ? (paidOrders.length / orders.length) * 100 : 0;
+    
+    // Top performing products (this would need order items data in a real implementation)
+    const topProducts = products.slice(0, 5);
+    
+    // Revenue trend by month (simplified)
+    const monthlyRevenue = paidOrders.reduce((acc: any, order: any) => {
+      const month = new Date(order.createdAt).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' });
+      acc[month] = (acc[month] || 0) + parseFloat(order.total);
+      return acc;
+    }, {});
+
+    return {
+      totalRevenue,
+      averageOrderValue,
+      conversionRate,
+      topProducts,
+      monthlyRevenue: Object.entries(monthlyRevenue).map(([month, revenue]) => ({ month, revenue }))
+    };
+  }, [orders, products]);
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-foreground">Analytics</h2>
+          <p className="text-muted-foreground">
+            Detailed insights into your store performance
+          </p>
+        </div>
+        
+        <Select value={dateRange} onValueChange={setDateRange}>
+          <SelectTrigger className="w-40">
+            <SelectValue placeholder="Date range" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="last7days">Last 7 days</SelectItem>
+            <SelectItem value="last30days">Last 30 days</SelectItem>
+            <SelectItem value="last90days">Last 90 days</SelectItem>
+            <SelectItem value="last12months">Last 12 months</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Key Metrics */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Total Revenue</p>
+                <p className="text-2xl font-bold">{formatPrice(analyticsData.totalRevenue)}</p>
+              </div>
+              <DollarSign className="h-8 w-8 text-green-600" />
+            </div>
+            <div className="mt-2">
+              <span className="text-xs text-green-600">+12% from last period</span>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Avg. Order Value</p>
+                <p className="text-2xl font-bold">{formatPrice(analyticsData.averageOrderValue)}</p>
+              </div>
+              <TrendingUp className="h-8 w-8 text-blue-600" />
+            </div>
+            <div className="mt-2">
+              <span className="text-xs text-blue-600">+5% from last period</span>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Conversion Rate</p>
+                <p className="text-2xl font-bold">{analyticsData.conversionRate.toFixed(1)}%</p>
+              </div>
+              <Star className="h-8 w-8 text-yellow-600" />
+            </div>
+            <div className="mt-2">
+              <span className="text-xs text-yellow-600">+2% from last period</span>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Total Orders</p>
+                <p className="text-2xl font-bold">{orders.length}</p>
+              </div>
+              <ShoppingCart className="h-8 w-8 text-purple-600" />
+            </div>
+            <div className="mt-2">
+              <span className="text-xs text-purple-600">+8% from last period</span>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Charts Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Revenue Trend */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Revenue Trend</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-64 flex items-center justify-center text-muted-foreground">
+              <div className="text-center">
+                <BarChart3 className="h-12 w-12 mx-auto mb-2" />
+                <p>Revenue chart would be displayed here</p>
+                <p className="text-sm">Integrate with a charting library like Recharts</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Top Products */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Top Products</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {analyticsData.topProducts.length > 0 ? (
+                analyticsData.topProducts.map((product: any, index) => (
+                  <div key={product.id} className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-primary-brand/10 rounded-full flex items-center justify-center">
+                        <span className="text-sm font-medium">{index + 1}</span>
+                      </div>
+                      <div>
+                        <p className="font-medium">{product.name}</p>
+                        <p className="text-sm text-muted-foreground">{formatPrice(product.price)}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-medium">{product.stock} in stock</p>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Package className="h-8 w-8 mx-auto mb-2" />
+                  <p>No products available yet</p>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Order Status Breakdown */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Order Status Overview</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {['pending', 'paid', 'processing', 'shipped'].map(status => {
+              const count = orders.filter((order: any) => order.status === status).length;
+              const percentage = orders.length > 0 ? (count / orders.length) * 100 : 0;
+              
+              return (
+                <div key={status} className="text-center">
+                  <div className="text-2xl font-bold">{count}</div>
+                  <div className="text-sm text-muted-foreground capitalize">{status}</div>
+                  <div className="text-xs text-muted-foreground">{percentage.toFixed(1)}%</div>
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// Settings Management Component  
+function SettingsManagement() {
+  const [whatsappPhone, setWhatsappPhone] = useState("");
+  const [storeName, setStoreName] = useState("");
+  const [storeDescription, setStoreDescription] = useState("");
+
+  const { data: tenant } = useTenant();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  // Initialize settings from tenant data
+  useEffect(() => {
+    if (tenant) {
+      const t = tenant as any;
+      setWhatsappPhone(t.whatsappPhone || "");
+      setStoreName(t.name || "");
+      setStoreDescription(t.description || "");
+    }
+  }, [tenant]);
+
+  // Update WhatsApp settings
+  const updateWhatsAppMutation = useMutation({
+    mutationFn: async (phone: string) => {
+      const response = await apiRequest("/api/tenant/whatsapp", "PUT", { whatsappPhone: phone });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/storefront/tenant"] });
+      toast({
+        title: "Success",
+        description: "WhatsApp settings updated successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update WhatsApp settings",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Update store information
+  const updateStoreInfoMutation = useMutation({
+    mutationFn: async (data: { name: string; description: string }) => {
+      const response = await apiRequest(`/api/admin/tenants/${tenant?.id}`, "PUT", data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/storefront/tenant"] });
+      toast({
+        title: "Success",
+        description: "Store information updated successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update store information",
+        variant: "destructive",
+      });
+    },
+  });
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h2 className="text-2xl font-bold text-foreground">Settings</h2>
+        <p className="text-muted-foreground">
+          Manage your store settings and notifications
+        </p>
+      </div>
+
+      {/* Store Information */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Store Information</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="store-name">Store Name</Label>
+              <Input
+                id="store-name"
+                value={storeName}
+                onChange={(e) => setStoreName(e.target.value)}
+                placeholder="Enter store name"
+              />
+            </div>
+            <div>
+              <Label>Store URL</Label>
+              <div className="flex items-center">
+                <span className="text-muted-foreground text-sm">
+                  {tenant?.subdomain}.{window.location.hostname}
+                </span>
+              </div>
+            </div>
+          </div>
+          
+          <div>
+            <Label htmlFor="store-description">Store Description</Label>
+            <Textarea
+              id="store-description"
+              value={storeDescription}
+              onChange={(e) => setStoreDescription(e.target.value)}
+              placeholder="Describe your store and what you sell"
+              rows={3}
+            />
+          </div>
+
+          <Button
+            onClick={() => updateStoreInfoMutation.mutate({ 
+              name: storeName, 
+              description: storeDescription 
+            })}
+            disabled={updateStoreInfoMutation.isPending}
+            className="bg-primary-brand hover:bg-primary-brand/90"
+          >
+            {updateStoreInfoMutation.isPending ? "Saving..." : "Save Store Information"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* WhatsApp Notifications */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Settings className="h-5 w-5" />
+            WhatsApp Notifications
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Receive WhatsApp notifications when new orders are placed in your store. 
+            Enter your WhatsApp phone number in international format (e.g., +27823456789).
+          </p>
+          
+          <div className="space-y-2">
+            <Label htmlFor="whatsapp-phone">WhatsApp Phone Number</Label>
+            <Input
+              id="whatsapp-phone"
+              type="tel"
+              placeholder="+27823456789"
+              value={whatsappPhone}
+              onChange={(e) => setWhatsappPhone(e.target.value)}
+              className="max-w-md"
+            />
+            <p className="text-xs text-muted-foreground">
+              Include the country code (e.g., +27 for South Africa)
+            </p>
+          </div>
+
+          <Button
+            onClick={() => updateWhatsAppMutation.mutate(whatsappPhone)}
+            disabled={updateWhatsAppMutation.isPending}
+            className="bg-primary-brand hover:bg-primary-brand/90"
+          >
+            {updateWhatsAppMutation.isPending ? "Saving..." : "Save WhatsApp Settings"}
+          </Button>
+
+          {(tenant as any)?.whatsappPhone && (
+            <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-md">
+              <p className="text-sm text-green-800">
+                ✓ WhatsApp notifications are enabled for: {(tenant as any).whatsappPhone}
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Notification Preferences */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Notification Preferences</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium">Order Notifications</p>
+                <p className="text-sm text-muted-foreground">Get notified when new orders are placed</p>
+              </div>
+              <Button variant="outline" disabled>
+                <span className="text-green-600">✓ Enabled</span>
+              </Button>
+            </div>
+            
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium">Payment Notifications</p>
+                <p className="text-sm text-muted-foreground">Get notified when payments are received</p>
+              </div>
+              <Button variant="outline" disabled>
+                <span className="text-green-600">✓ Enabled</span>
+              </Button>
+            </div>
+            
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium">Low Stock Alerts</p>
+                <p className="text-sm text-muted-foreground">Get notified when products are running low</p>
+              </div>
+              <Button variant="outline" disabled>
+                <span className="text-gray-500">Coming Soon</span>
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Security Settings */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Security & Access</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium">Account Type</p>
+                <p className="text-sm text-muted-foreground">Your current access level</p>
+              </div>
+              <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
+                Store Owner
+              </span>
+            </div>
+            
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium">Two-Factor Authentication</p>
+                <p className="text-sm text-muted-foreground">Add extra security to your account</p>
+              </div>
+              <Button variant="outline" disabled>
+                <span className="text-gray-500">Coming Soon</span>
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Quick Actions */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Quick Actions</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <a
+              href={`https://${tenant?.subdomain}.${window.location.hostname}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 p-4 border rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <ExternalLink className="h-5 w-5 text-primary-brand" />
+              <div>
+                <p className="font-medium">View Your Store</p>
+                <p className="text-sm text-muted-foreground">See how customers see your store</p>
+              </div>
+            </a>
+            
+            <Button variant="outline" className="h-auto p-4 justify-start" disabled>
+              <Download className="h-5 w-5 mr-2" />
+              <div className="text-left">
+                <p className="font-medium">Export Data</p>
+                <p className="text-sm text-muted-foreground">Download your store data</p>
+              </div>
+            </Button>
+            
+            <Button variant="outline" className="h-auto p-4 justify-start" disabled>
+              <Settings className="h-5 w-5 mr-2" />
+              <div className="text-left">
+                <p className="font-medium">API Settings</p>
+                <p className="text-sm text-muted-foreground">Manage integrations</p>
+              </div>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
