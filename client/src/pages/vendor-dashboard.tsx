@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { 
@@ -31,8 +32,13 @@ export function VendorDashboard() {
   
   // Delivery settings state
   const [deliveryOptions, setDeliveryOptions] = useState<string[]>(["collection"]);
-  const [pudoCollectionAddress, setPudoCollectionAddress] = useState("");
   const [pudoPreferredLocker, setPudoPreferredLocker] = useState("");
+  
+  // Collection address fields
+  const [streetAddress, setStreetAddress] = useState("");
+  const [suburb, setSuburb] = useState("");
+  const [city, setCity] = useState("");
+  const [postalCode, setPostalCode] = useState("");
   
   const { user } = useAuth();
   const { data: tenant } = useTenant();
@@ -45,14 +51,33 @@ export function VendorDashboard() {
     enabled: activeTab === "overview",
   });
 
+  // Fetch Pudo lockers for dropdown
+  const { data: pudoLockers } = useQuery({
+    queryKey: ["/api/pudo/lockers"],
+    enabled: activeTab === "delivery",
+  });
+
   // Initialize settings from tenant data
   useEffect(() => {
     if (tenant) {
       const t = tenant as any;
       if (t.whatsappPhone) setWhatsappPhone(t.whatsappPhone);
       if (t.deliveryOptions) setDeliveryOptions(t.deliveryOptions);
-      if (t.pudoCollectionAddress) setPudoCollectionAddress(t.pudoCollectionAddress);
       if (t.pudoPreferredLocker) setPudoPreferredLocker(t.pudoPreferredLocker);
+      
+      // Parse collection address if it exists
+      if (t.pudoCollectionAddress) {
+        try {
+          const address = JSON.parse(t.pudoCollectionAddress);
+          setStreetAddress(address.streetAddress || "");
+          setSuburb(address.suburb || "");
+          setCity(address.city || "");
+          setPostalCode(address.postalCode || "");
+        } catch (e) {
+          // If it's not JSON, treat as legacy string address
+          setStreetAddress(t.pudoCollectionAddress);
+        }
+      }
     }
   }, [tenant]);
 
@@ -434,31 +459,79 @@ export function VendorDashboard() {
                       </div>
 
                       <div>
-                        <Label htmlFor="pudoCollectionAddress">Collection Address</Label>
-                        <Textarea
-                          id="pudoCollectionAddress"
-                          value={pudoCollectionAddress}
-                          onChange={(e) => setPudoCollectionAddress(e.target.value)}
-                          placeholder="Enter your full collection address (JSON format)"
-                          className="mt-1"
-                          rows={4}
-                        />
-                        <p className="text-sm text-muted-foreground mt-1">
+                        <Label>Collection Address</Label>
+                        <p className="text-sm text-muted-foreground mb-3">
                           Address where Courier Guy will collect items from your store
                         </p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <Label htmlFor="streetAddress">Street Address</Label>
+                            <Input
+                              id="streetAddress"
+                              value={streetAddress}
+                              onChange={(e) => setStreetAddress(e.target.value)}
+                              placeholder="123 Main Street"
+                              className="mt-1"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="suburb">Suburb</Label>
+                            <Input
+                              id="suburb"
+                              value={suburb}
+                              onChange={(e) => setSuburb(e.target.value)}
+                              placeholder="Sandton"
+                              className="mt-1"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="city">City</Label>
+                            <Input
+                              id="city"
+                              value={city}
+                              onChange={(e) => setCity(e.target.value)}
+                              placeholder="Johannesburg"
+                              className="mt-1"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="postalCode">Postal Code</Label>
+                            <Input
+                              id="postalCode"
+                              value={postalCode}
+                              onChange={(e) => setPostalCode(e.target.value)}
+                              placeholder="2196"
+                              className="mt-1"
+                            />
+                          </div>
+                        </div>
                       </div>
 
                       <div>
                         <Label htmlFor="pudoPreferredLocker">Preferred Locker Location (Optional)</Label>
-                        <Input
-                          id="pudoPreferredLocker"
-                          value={pudoPreferredLocker}
-                          onChange={(e) => setPudoPreferredLocker(e.target.value)}
-                          placeholder="Default locker location ID"
-                          className="mt-1"
-                        />
+                        <Select value={pudoPreferredLocker} onValueChange={setPudoPreferredLocker}>
+                          <SelectTrigger className="mt-1">
+                            <SelectValue placeholder="Select a preferred locker location" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {pudoLockers && Array.isArray(pudoLockers) && pudoLockers.length > 0 ? (
+                              pudoLockers.map((locker: any) => (
+                                <SelectItem key={locker.id} value={locker.id}>
+                                  <div>
+                                    <div className="font-medium">{locker.name}</div>
+                                    <div className="text-sm text-muted-foreground">{locker.address}</div>
+                                  </div>
+                                </SelectItem>
+                              ))
+                            ) : (
+                              <SelectItem value="loading" disabled>
+                                Loading locker locations...
+                              </SelectItem>
+                            )}
+                          </SelectContent>
+                        </Select>
                         <p className="text-sm text-muted-foreground mt-1">
-                          Default Pudo locker for your shipments
+                          Default Pudo locker for your shipments. Customers can still choose a different locker at checkout.
                         </p>
                       </div>
                     </CardContent>
@@ -469,9 +542,19 @@ export function VendorDashboard() {
                 <div className="flex justify-end">
                   <Button
                     onClick={() => {
+                      // Build collection address from individual fields
+                      const collectionAddress = streetAddress || suburb || city || postalCode 
+                        ? JSON.stringify({
+                            streetAddress: streetAddress.trim(),
+                            suburb: suburb.trim(),
+                            city: city.trim(),
+                            postalCode: postalCode.trim()
+                          })
+                        : undefined;
+                      
                       updateDeliveryMutation.mutate({
                         deliveryOptions,
-                        pudoCollectionAddress: pudoCollectionAddress || undefined,
+                        pudoCollectionAddress: collectionAddress,
                         pudoPreferredLocker: pudoPreferredLocker || undefined,
                       });
                     }}
