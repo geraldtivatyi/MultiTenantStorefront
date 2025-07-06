@@ -62,6 +62,9 @@ export class PudoService {
 
     const url = `${this.baseUrl}${endpoint}`;
     
+    // Try different authentication methods
+    console.log('Trying PUDO API with Bearer token authentication');
+    
     const response = await fetch(url, {
       ...options,
       headers: {
@@ -73,9 +76,47 @@ export class PudoService {
     });
 
     if (!response.ok) {
-      throw new Error(`Pudo API error: ${response.status} ${response.statusText}`);
+      console.log(`Bearer auth failed with ${response.status}, trying alternative methods`);
+      
+      // Try with API key in header
+      const response2 = await fetch(url, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-API-Key': this.apiKey,
+          ...options.headers,
+        },
+      });
+
+      if (!response2.ok) {
+        console.log(`X-API-Key header failed with ${response2.status}, trying Basic auth`);
+        
+        // Try Basic Auth with API key as username
+        const credentials = Buffer.from(`${this.apiKey}:`).toString('base64');
+        const response3 = await fetch(url, {
+          ...options,
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Authorization': `Basic ${credentials}`,
+            ...options.headers,
+          },
+        });
+
+        if (!response3.ok) {
+          throw new Error(`Pudo API error: ${response3.status} ${response3.statusText}`);
+        }
+        
+        console.log('Basic auth succeeded');
+        return response3.json();
+      }
+      
+      console.log('X-API-Key header succeeded');
+      return response2.json();
     }
 
+    console.log('Bearer auth succeeded');
     return response.json();
   }
 
