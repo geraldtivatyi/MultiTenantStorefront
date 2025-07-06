@@ -132,14 +132,34 @@ export function VendorDashboard() {
       // Parse collection address if it exists
       if (t.pudoCollectionAddress) {
         try {
-          const address = JSON.parse(t.pudoCollectionAddress);
-          setStreetAddress(address.streetAddress || "");
-          setSuburb(address.suburb || "");
-          setCity(address.city || "");
-          setPostalCode(address.postalCode || "");
+          let address;
+          
+          // Check if it's already an object or needs to be parsed
+          if (typeof t.pudoCollectionAddress === 'string') {
+            address = JSON.parse(t.pudoCollectionAddress);
+          } else if (typeof t.pudoCollectionAddress === 'object') {
+            address = t.pudoCollectionAddress;
+          }
+          
+          if (address && typeof address === 'object') {
+            setStreetAddress(address.streetAddress || "");
+            setSuburb(address.suburb || "");
+            setCity(address.city || "");
+            setPostalCode(address.postalCode || "");
+          } else {
+            // Fallback: treat as legacy string address
+            setStreetAddress(String(t.pudoCollectionAddress));
+            setSuburb("");
+            setCity("");
+            setPostalCode("");
+          }
         } catch (e) {
-          // If it's not JSON, treat as legacy string address
-          setStreetAddress(t.pudoCollectionAddress);
+          console.error('Error parsing collection address:', e);
+          // If parsing fails, treat as legacy string address
+          setStreetAddress(String(t.pudoCollectionAddress));
+          setSuburb("");
+          setCity("");
+          setPostalCode("");
         }
       }
     }
