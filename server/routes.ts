@@ -35,6 +35,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use('/api/storefront', tenantMiddleware());
   app.use('/api/cart', tenantMiddleware());
   app.use('/api/orders', tenantMiddleware());
+  app.use('/api/pudo', tenantMiddleware());
   
   // Admin routes (no tenant middleware)
   app.use('/api/admin', adminBypass());
@@ -1087,8 +1088,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Tenant not found' });
       }
 
-      if (!req.tenant.pudoApiKey || !req.tenant.pudoCollectionAddress) {
-        return res.status(400).json({ error: 'Pudo not configured for this store' });
+      if (!req.tenant.pudoCollectionAddress) {
+        return res.status(400).json({ error: 'Collection address not configured for Pudo delivery' });
       }
 
       if (!deliveryLocker) {
