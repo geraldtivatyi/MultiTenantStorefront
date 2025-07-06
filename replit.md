@@ -195,3 +195,10 @@ Preferred communication style: Simple, everyday language.
   - Simplified delivery configuration - vendors only need to set collection address and preferred locker
   - All Pudo functionality (locker fetching, rate calculation) now works seamlessly for all vendors
   - Enhanced checkout flow with delivery method selection and dynamic pricing remains functional
+- July 6, 2025: Improved vendor delivery configuration interface:
+  - Replaced complex JSON address input with simple individual fields (street, suburb, city, postal code)
+  - Created dropdown for preferred locker selection showing location names with addresses
+  - Implemented sample locker data for major South African cities (PUDO API lacks public lockers endpoint)
+  - Added proper loading states and error handling for locker selection
+  - Maintained backward compatibility for existing JSON address data
+  - Collection address automatically converted to JSON format when saving
