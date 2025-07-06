@@ -47,76 +47,41 @@ interface PudoDimensions {
 
 export class PudoService {
   private readonly baseUrl = 'https://sandbox.api-pudo.co.za/api/v1';
-  private readonly apiKey = process.env.PUDO_API_KEY;
+  private readonly bearerToken = process.env.PUDO_BEARER_TOKEN;
+  private readonly apiKey = process.env.PUDO_API_KEY; // Keep as fallback
 
   constructor() {
-    if (!this.apiKey) {
-      console.warn('PUDO_API_KEY environment variable not set');
+    if (!this.bearerToken && !this.apiKey) {
+      console.warn('Neither PUDO_BEARER_TOKEN nor PUDO_API_KEY environment variable is set');
     }
   }
 
   private async makeRequest(endpoint: string, options: RequestInit = {}): Promise<any> {
-    if (!this.apiKey) {
-      throw new Error('Pudo API key not configured');
+    // Prefer Bearer token if available, fallback to API key
+    const authToken = this.bearerToken || this.apiKey;
+    
+    if (!authToken) {
+      throw new Error('No PUDO authentication token configured');
     }
 
     const url = `${this.baseUrl}${endpoint}`;
     
-    // Try different authentication methods
-    console.log('Trying PUDO API with Bearer token authentication');
+    console.log('Making PUDO API request with Bearer token authentication');
     
     const response = await fetch(url, {
       ...options,
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`,
+        'Authorization': `Bearer ${authToken}`,
         ...options.headers,
       },
     });
 
     if (!response.ok) {
-      console.log(`Bearer auth failed with ${response.status}, trying alternative methods`);
-      
-      // Try with API key in header
-      const response2 = await fetch(url, {
-        ...options,
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'X-API-Key': this.apiKey,
-          ...options.headers,
-        },
-      });
-
-      if (!response2.ok) {
-        console.log(`X-API-Key header failed with ${response2.status}, trying Basic auth`);
-        
-        // Try Basic Auth with API key as username
-        const credentials = Buffer.from(`${this.apiKey}:`).toString('base64');
-        const response3 = await fetch(url, {
-          ...options,
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'Authorization': `Basic ${credentials}`,
-            ...options.headers,
-          },
-        });
-
-        if (!response3.ok) {
-          throw new Error(`Pudo API error: ${response3.status} ${response3.statusText}`);
-        }
-        
-        console.log('Basic auth succeeded');
-        return response3.json();
-      }
-      
-      console.log('X-API-Key header succeeded');
-      return response2.json();
+      throw new Error(`Pudo API error: ${response.status} ${response.statusText}`);
     }
 
-    console.log('Bearer auth succeeded');
     return response.json();
   }
 
@@ -124,13 +89,35 @@ export class PudoService {
     try {
       console.log('Fetching real locker data from PUDO API using /lockers-data endpoint');
       const response = await this.makeRequest('/lockers-data');
-      console.log('PUDO lockers response:', response);
       
-      // The API might return lockers in different formats, handle accordingly
-      const lockers = response.lockers || response.data || response || [];
+      // The API returns an array of locker objects directly
+      const lockers = Array.isArray(response) ? response : [];
+      console.log(`Retrieved ${lockers.length} lockers from PUDO API`);
       
-      // Map the response to our expected format if needed
-      return Array.isArray(lockers) ? lockers : [];
+      // Map the PUDO API format to our expected format
+      return lockers.map((locker: any) => ({
+        id: locker.code,
+        name: locker.name,
+        address: locker.address,
+        latitude: parseFloat(locker.latitude),
+        longitude: parseFloat(locker.longitude),
+        city: locker.detailed_address?.locality || locker.place?.town || 'Unknown',
+        province: locker.detailed_address?.province || 'Unknown',
+        postal_code: locker.detailed_address?.postal_code || locker.place?.postalCode || '',
+        locker_sizes: locker.lstTypesBoxes?.map((box: any) => ({
+          size: box.name?.toLowerCase() || 'unknown',
+          dimensions: {
+            length: box.length || 0,
+            width: box.width || 0,
+            height: box.height || 0
+          },
+          max_weight: box.max_weight || 0
+        })) || [
+          // Default sizes if not available
+          { size: "small", dimensions: { length: 30, width: 30, height: 15 }, max_weight: 5 },
+          { size: "medium", dimensions: { length: 40, width: 30, height: 25 }, max_weight: 10 }
+        ]
+      }));
     } catch (error) {
       console.error('Error fetching Pudo lockers from API:', error);
       console.log('Falling back to sample locker data');
