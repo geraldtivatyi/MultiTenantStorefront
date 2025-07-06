@@ -1579,6 +1579,102 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Create new product
+  app.post('/api/vendor/products', requireAuth, requireTenantOwner, async (req: AuthenticatedRequest, res) => {
+    try {
+      const user = req.user!;
+      let tenantId = user.tenantId;
+      
+      if (!tenantId) {
+        return res.status(404).json({ error: 'No tenant associated with this user' });
+      }
+
+      const { name, description, price, stock, pudoWeight, pudoDimensions } = req.body;
+
+      if (!name || !price || stock === undefined || !pudoWeight || !pudoDimensions) {
+        return res.status(400).json({ error: 'Missing required fields' });
+      }
+
+      const product = await storage.createProduct({
+        tenantId,
+        name,
+        description: description || '',
+        price: parseFloat(price),
+        stock: parseInt(stock),
+        pudoWeight: parseFloat(pudoWeight),
+        pudoDimensions: JSON.stringify(pudoDimensions),
+      });
+
+      res.json(product);
+    } catch (error) {
+      console.error('Create product error:', error);
+      res.status(500).json({ error: 'Failed to create product' });
+    }
+  });
+
+  // Update product
+  app.put('/api/vendor/products/:id', requireAuth, requireTenantOwner, async (req: AuthenticatedRequest, res) => {
+    try {
+      const user = req.user!;
+      const productId = parseInt(req.params.id);
+      let tenantId = user.tenantId;
+      
+      if (!tenantId) {
+        return res.status(404).json({ error: 'No tenant associated with this user' });
+      }
+
+      // Verify product belongs to this tenant
+      const existingProduct = await storage.getProduct(productId, tenantId);
+      if (!existingProduct) {
+        return res.status(404).json({ error: 'Product not found' });
+      }
+
+      const { name, description, price, stock, pudoWeight, pudoDimensions } = req.body;
+
+      const updateData: any = {};
+      if (name !== undefined) updateData.name = name;
+      if (description !== undefined) updateData.description = description;
+      if (price !== undefined) updateData.price = parseFloat(price);
+      if (stock !== undefined) updateData.stock = parseInt(stock);
+      if (pudoWeight !== undefined) updateData.pudoWeight = parseFloat(pudoWeight);
+      if (pudoDimensions !== undefined) updateData.pudoDimensions = JSON.stringify(pudoDimensions);
+
+      const updatedProduct = await storage.updateProduct(productId, updateData);
+      res.json(updatedProduct);
+    } catch (error) {
+      console.error('Update product error:', error);
+      res.status(500).json({ error: 'Failed to update product' });
+    }
+  });
+
+  // Delete product
+  app.delete('/api/vendor/products/:id', requireAuth, requireTenantOwner, async (req: AuthenticatedRequest, res) => {
+    try {
+      const user = req.user!;
+      const productId = parseInt(req.params.id);
+      let tenantId = user.tenantId;
+      
+      if (!tenantId) {
+        return res.status(404).json({ error: 'No tenant associated with this user' });
+      }
+
+      // Verify product belongs to this tenant
+      const existingProduct = await storage.getProduct(productId, tenantId);
+      if (!existingProduct) {
+        return res.status(404).json({ error: 'Product not found' });
+      }
+
+      // Note: In production, you might want to soft delete or check for existing orders
+      // For now, we'll assume simple delete
+      await storage.updateProduct(productId, { stock: 0 }); // Soft delete by setting stock to 0
+      
+      res.json({ message: 'Product deactivated successfully' });
+    } catch (error) {
+      console.error('Delete product error:', error);
+      res.status(500).json({ error: 'Failed to delete product' });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

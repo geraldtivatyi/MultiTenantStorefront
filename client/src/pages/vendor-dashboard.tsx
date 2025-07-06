@@ -20,7 +20,17 @@ import {
   Menu,
   ExternalLink,
   Settings,
-  Truck
+  Truck,
+  Plus,
+  Edit,
+  Trash2,
+  Eye,
+  Search,
+  Filter,
+  Download,
+  MoreHorizontal,
+  Calendar,
+  Star
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useTenant } from "@/hooks/use-tenant";
@@ -418,11 +428,9 @@ export function VendorDashboard() {
               </>
             )}
 
-            {/* Other Tab Content */}
+            {/* Products Tab Content */}
             {activeTab === "products" && (
-              <div className="text-center py-8">
-                <p className="text-muted-foreground">Product management interface coming soon...</p>
-              </div>
+              <ProductsManagement />
             )}
 
             {activeTab === "orders" && (
@@ -729,6 +737,588 @@ export function VendorDashboard() {
             )}
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// Products Management Component
+function ProductsManagement() {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [sortBy, setSortBy] = useState("name");
+  const [sortOrder, setSortOrder] = useState("asc");
+  
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  // Fetch vendor products
+  const { data: products = [], isLoading } = useQuery({
+    queryKey: ["/api/vendor/products"],
+  });
+
+  // Filter and sort products
+  const filteredProducts = React.useMemo(() => {
+    let filtered = products;
+    
+    // Apply search filter
+    if (searchTerm.trim()) {
+      const searchLower = searchTerm.toLowerCase();
+      filtered = products.filter((product: any) =>
+        product.name?.toLowerCase().includes(searchLower) ||
+        product.description?.toLowerCase().includes(searchLower)
+      );
+    }
+    
+    // Apply sorting
+    filtered.sort((a: any, b: any) => {
+      let aValue = a[sortBy];
+      let bValue = b[sortBy];
+      
+      if (sortBy === "price") {
+        aValue = parseFloat(aValue) || 0;
+        bValue = parseFloat(bValue) || 0;
+      }
+      
+      if (sortOrder === "asc") {
+        return aValue > bValue ? 1 : -1;
+      } else {
+        return aValue < bValue ? 1 : -1;
+      }
+    });
+    
+    return filtered;
+  }, [products, searchTerm, sortBy, sortOrder]);
+
+  // Delete product mutation
+  const deleteProductMutation = useMutation({
+    mutationFn: async (productId: number) => {
+      const response = await apiRequest(`/api/vendor/products/${productId}`, "DELETE");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/vendor/products"] });
+      setIsDeleteModalOpen(false);
+      setSelectedProduct(null);
+      toast({
+        title: "Success",
+        description: "Product deleted successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete product",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const formatPrice = (price: number) => `R ${price.toFixed(2)}`;
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="animate-pulse space-y-4">
+          <div className="h-8 bg-gray-200 rounded w-1/4"></div>
+          <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+          <div className="grid gap-4">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="h-24 bg-gray-200 rounded"></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-foreground">Products</h2>
+          <p className="text-muted-foreground">
+            Manage your product catalog and view performance analytics
+          </p>
+        </div>
+        <Button
+          onClick={() => setIsAddModalOpen(true)}
+          className="bg-primary-brand hover:bg-primary-brand/90"
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          Add Product
+        </Button>
+      </div>
+
+      {/* Analytics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Total Products</p>
+                <p className="text-2xl font-bold">{products.length}</p>
+              </div>
+              <Package className="h-8 w-8 text-primary-brand" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Active Products</p>
+                <p className="text-2xl font-bold">
+                  {products.filter((p: any) => p.stock > 0).length}
+                </p>
+              </div>
+              <TrendingUp className="h-8 w-8 text-green-600" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Out of Stock</p>
+                <p className="text-2xl font-bold">
+                  {products.filter((p: any) => p.stock === 0).length}
+                </p>
+              </div>
+              <Package className="h-8 w-8 text-red-600" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Avg. Price</p>
+                <p className="text-2xl font-bold">
+                  {products.length > 0 
+                    ? formatPrice(products.reduce((sum: number, p: any) => sum + parseFloat(p.price), 0) / products.length)
+                    : "R 0.00"
+                  }
+                </p>
+              </div>
+              <DollarSign className="h-8 w-8 text-blue-600" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Search and Filter Bar */}
+      <div className="flex flex-col sm:flex-row gap-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search products by name or description..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        
+        <div className="flex gap-2">
+          <Select value={sortBy} onValueChange={setSortBy}>
+            <SelectTrigger className="w-40">
+              <SelectValue placeholder="Sort by" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="name">Name</SelectItem>
+              <SelectItem value="price">Price</SelectItem>
+              <SelectItem value="stock">Stock</SelectItem>
+              <SelectItem value="createdAt">Date Added</SelectItem>
+            </SelectContent>
+          </Select>
+          
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
+          >
+            {sortOrder === "asc" ? "↑" : "↓"}
+          </Button>
+        </div>
+      </div>
+
+      {/* Products Table */}
+      <Card>
+        <CardContent className="p-0">
+          {filteredProducts.length === 0 ? (
+            <div className="text-center py-8">
+              <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <p className="text-lg font-medium">No products found</p>
+              <p className="text-muted-foreground">
+                {searchTerm.trim() 
+                  ? "Try adjusting your search terms" 
+                  : "Get started by adding your first product"
+                }
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="border-b">
+                  <tr>
+                    <th className="text-left p-4 font-medium">Product</th>
+                    <th className="text-left p-4 font-medium">Price</th>
+                    <th className="text-left p-4 font-medium">Stock</th>
+                    <th className="text-left p-4 font-medium">Status</th>
+                    <th className="text-left p-4 font-medium">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredProducts.map((product: any) => (
+                    <tr key={product.id} className="border-b hover:bg-gray-50">
+                      <td className="p-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center">
+                            <Package className="h-6 w-6 text-gray-500" />
+                          </div>
+                          <div>
+                            <p className="font-medium">{product.name}</p>
+                            <p className="text-sm text-muted-foreground line-clamp-1">
+                              {product.description}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        <span className="font-medium">{formatPrice(product.price)}</span>
+                      </td>
+                      <td className="p-4">
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          product.stock > 10 
+                            ? "bg-green-100 text-green-800" 
+                            : product.stock > 0 
+                            ? "bg-yellow-100 text-yellow-800"
+                            : "bg-red-100 text-red-800"
+                        }`}>
+                          {product.stock} units
+                        </span>
+                      </td>
+                      <td className="p-4">
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          product.stock > 0 
+                            ? "bg-green-100 text-green-800" 
+                            : "bg-red-100 text-red-800"
+                        }`}>
+                          {product.stock > 0 ? "In Stock" : "Out of Stock"}
+                        </span>
+                      </td>
+                      <td className="p-4">
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedProduct(product);
+                              setIsEditModalOpen(true);
+                            }}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedProduct(product);
+                              setIsDeleteModalOpen(true);
+                            }}
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Add Product Modal */}
+      {isAddModalOpen && (
+        <ProductFormModal
+          isOpen={isAddModalOpen}
+          onClose={() => setIsAddModalOpen(false)}
+          product={null}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ["/api/vendor/products"] });
+            setIsAddModalOpen(false);
+          }}
+        />
+      )}
+
+      {/* Edit Product Modal */}
+      {isEditModalOpen && selectedProduct && (
+        <ProductFormModal
+          isOpen={isEditModalOpen}
+          onClose={() => {
+            setIsEditModalOpen(false);
+            setSelectedProduct(null);
+          }}
+          product={selectedProduct}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ["/api/vendor/products"] });
+            setIsEditModalOpen(false);
+            setSelectedProduct(null);
+          }}
+        />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {isDeleteModalOpen && selectedProduct && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h3 className="text-lg font-semibold mb-4">Delete Product</h3>
+            <p className="text-muted-foreground mb-6">
+              Are you sure you want to delete "{selectedProduct.name}"? This action cannot be undone.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsDeleteModalOpen(false);
+                  setSelectedProduct(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => deleteProductMutation.mutate(selectedProduct.id)}
+                disabled={deleteProductMutation.isPending}
+              >
+                {deleteProductMutation.isPending ? "Deleting..." : "Delete"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Product Form Modal Component
+function ProductFormModal({ 
+  isOpen, 
+  onClose, 
+  product, 
+  onSuccess 
+}: { 
+  isOpen: boolean; 
+  onClose: () => void; 
+  product: any; 
+  onSuccess: () => void; 
+}) {
+  const [formData, setFormData] = useState({
+    name: product?.name || "",
+    description: product?.description || "",
+    price: product?.price || "",
+    stock: product?.stock || "",
+    pudoWeight: product?.pudoWeight || "",
+    pudoDimensions: product?.pudoDimensions || { length: "", width: "", height: "" }
+  });
+
+  const { toast } = useToast();
+
+  const isEditing = Boolean(product);
+
+  // Create/Update product mutation
+  const productMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const endpoint = isEditing 
+        ? `/api/vendor/products/${product.id}` 
+        : "/api/vendor/products";
+      const method = isEditing ? "PUT" : "POST";
+      
+      const response = await apiRequest(endpoint, method, {
+        ...data,
+        price: parseFloat(data.price),
+        stock: parseInt(data.stock),
+        pudoWeight: parseFloat(data.pudoWeight),
+        pudoDimensions: {
+          length: parseFloat(data.pudoDimensions.length),
+          width: parseFloat(data.pudoDimensions.width),
+          height: parseFloat(data.pudoDimensions.height)
+        }
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: `Product ${isEditing ? "updated" : "created"} successfully`,
+      });
+      onSuccess();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || `Failed to ${isEditing ? "update" : "create"} product`,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    productMutation.mutate(formData);
+  };
+
+  const handleInputChange = (field: string, value: any) => {
+    if (field.startsWith("pudoDimensions.")) {
+      const dimensionField = field.split(".")[1];
+      setFormData(prev => ({
+        ...prev,
+        pudoDimensions: {
+          ...prev.pudoDimensions,
+          [dimensionField]: value
+        }
+      }));
+    } else {
+      setFormData(prev => ({ ...prev, [field]: value }));
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <h3 className="text-lg font-semibold mb-4">
+          {isEditing ? "Edit Product" : "Add New Product"}
+        </h3>
+        
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="name">Product Name</Label>
+              <Input
+                id="name"
+                value={formData.name}
+                onChange={(e) => handleInputChange("name", e.target.value)}
+                placeholder="Enter product name"
+                required
+              />
+            </div>
+            
+            <div>
+              <Label htmlFor="price">Price (ZAR)</Label>
+              <Input
+                id="price"
+                type="number"
+                step="0.01"
+                value={formData.price}
+                onChange={(e) => handleInputChange("price", e.target.value)}
+                placeholder="0.00"
+                required
+              />
+            </div>
+          </div>
+
+          <div>
+            <Label htmlFor="description">Description</Label>
+            <Textarea
+              id="description"
+              value={formData.description}
+              onChange={(e) => handleInputChange("description", e.target.value)}
+              placeholder="Enter product description"
+              rows={3}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="stock">Stock Quantity</Label>
+              <Input
+                id="stock"
+                type="number"
+                value={formData.stock}
+                onChange={(e) => handleInputChange("stock", e.target.value)}
+                placeholder="0"
+                required
+              />
+            </div>
+            
+            <div>
+              <Label htmlFor="pudoWeight">Weight (kg)</Label>
+              <Input
+                id="pudoWeight"
+                type="number"
+                step="0.1"
+                value={formData.pudoWeight}
+                onChange={(e) => handleInputChange("pudoWeight", e.target.value)}
+                placeholder="0.0"
+                required
+              />
+            </div>
+          </div>
+
+          <div>
+            <Label>Dimensions (cm) for Pudo Shipping</Label>
+            <div className="grid grid-cols-3 gap-2 mt-1">
+              <div>
+                <Input
+                  type="number"
+                  step="0.1"
+                  value={formData.pudoDimensions.length}
+                  onChange={(e) => handleInputChange("pudoDimensions.length", e.target.value)}
+                  placeholder="Length"
+                  required
+                />
+              </div>
+              <div>
+                <Input
+                  type="number"
+                  step="0.1"
+                  value={formData.pudoDimensions.width}
+                  onChange={(e) => handleInputChange("pudoDimensions.width", e.target.value)}
+                  placeholder="Width"
+                  required
+                />
+              </div>
+              <div>
+                <Input
+                  type="number"
+                  step="0.1"
+                  value={formData.pudoDimensions.height}
+                  onChange={(e) => handleInputChange("pudoDimensions.height", e.target.value)}
+                  placeholder="Height"
+                  required
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-2 justify-end pt-4">
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button 
+              type="submit" 
+              disabled={productMutation.isPending}
+              className="bg-primary-brand hover:bg-primary-brand/90"
+            >
+              {productMutation.isPending 
+                ? (isEditing ? "Updating..." : "Creating...") 
+                : (isEditing ? "Update Product" : "Create Product")
+              }
+            </Button>
+          </div>
+        </form>
       </div>
     </div>
   );
