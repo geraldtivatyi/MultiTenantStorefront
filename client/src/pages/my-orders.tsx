@@ -15,6 +15,7 @@ import { formatPrice } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
+import { paystackService } from "@/lib/paystack";
 import { 
   Package, 
   Calendar, 
@@ -43,6 +44,7 @@ export function MyOrders() {
   const [expandedOrder, setExpandedOrder] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [processingPayments, setProcessingPayments] = useState<Set<number>>(new Set());
   const { toast } = useToast();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const queryClient = useQueryClient();
@@ -85,24 +87,55 @@ export function MyOrders() {
     },
   });
 
-  // Complete payment mutation
-  const completePaymentMutation = useMutation({
-    mutationFn: async (orderId: number) => {
-      return apiRequest(`/api/orders/${orderId}/complete-payment`, "POST");
-    },
-    onSuccess: (data: any) => {
-      // Redirect to payment page
-      window.open(data.paymentUrl, '_blank');
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/my-orders'] });
-    },
-    onError: () => {
+  // Complete payment function with Paystack popup
+  const completePayment = async (orderId: number, order: OrderWithItems) => {
+    // Add order to processing set
+    setProcessingPayments(prev => new Set(prev).add(orderId));
+    
+    try {
+      // Initialize Paystack service
+      await paystackService.initialize();
+      
+      // Get payment details from server
+      const response = await apiRequest(`/api/orders/${orderId}/complete-payment`, "POST");
+      const data = await response.json();
+      
+      // Process payment with Paystack popup
+      await paystackService.makePayment({
+        email: order.customerEmail,
+        amount: parseFloat(order.total),
+        reference: data.reference,
+        onSuccess: (response) => {
+          toast({
+            title: "Payment successful!",
+            description: `Order ${order.orderNumber} payment has been completed.`,
+          });
+          queryClient.invalidateQueries({ queryKey: ['/api/orders/my-orders'] });
+        },
+        onCancel: () => {
+          toast({
+            title: "Payment cancelled",
+            description: "You can complete your payment later.",
+            variant: "destructive",
+          });
+        },
+      });
+    } catch (error) {
+      console.error("Payment completion error:", error);
       toast({
         title: "Error",
         description: "Failed to initialize payment. Please try again.",
         variant: "destructive",
       });
-    },
-  });
+    } finally {
+      // Remove order from processing set
+      setProcessingPayments(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(orderId);
+        return newSet;
+      });
+    }
+  };
 
   // Filter and search orders
   const filteredOrders = useMemo(() => {
@@ -163,6 +196,13 @@ export function MyOrders() {
           </Link>
           <h1 className="text-3xl font-bold text-foreground">My Orders</h1>
           <p className="text-muted-foreground mt-2">Track and manage your order history</p>
+        </div>
+        
+        {/* Test Mode Notice */}
+        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-md dark:bg-blue-900/20 dark:border-blue-800">
+          <p className="text-sm text-blue-800 dark:text-blue-200">
+            <strong>Test Mode:</strong> Use test card number 4084084084084081 for payment completion testing. No real charges will be made.
+          </p>
         </div>
 
         {/* Filters and Search */}
@@ -318,12 +358,12 @@ export function MyOrders() {
                         {order.status === 'pending' && (
                           <Button 
                             size="sm"
-                            onClick={() => completePaymentMutation.mutate(order.id)}
-                            disabled={completePaymentMutation.isPending}
+                            onClick={() => completePayment(order.id, order)}
+                            disabled={processingPayments.has(order.id)}
                             className="bg-primary-brand hover:bg-primary-brand/90"
                           >
                             <CreditCard className="h-4 w-4 mr-2" />
-                            {completePaymentMutation.isPending ? "Processing..." : "Complete Payment"}
+                            {processingPayments.has(order.id) ? "Processing..." : "Complete Payment"}
                           </Button>
                         )}
                         <Button 
