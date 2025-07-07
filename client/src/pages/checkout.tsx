@@ -190,7 +190,7 @@ export function Checkout() {
 
   const checkoutMutation = useMutation({
     mutationFn: async (data: Omit<CheckoutFormData, "paymentMethod">) => {
-      const response = await apiRequest("POST", "/api/orders/checkout", data);
+      const response = await apiRequest("/api/orders/checkout", "POST", data);
       return response.json();
     },
   });
@@ -233,6 +233,7 @@ export function Checkout() {
 
     try {
       // Initialize Paystack service
+      console.log("Initializing Paystack service...");
       await paystackService.initialize();
 
       // Create order with delivery information
@@ -242,6 +243,8 @@ export function Checkout() {
         shippingCost,
         totalAmount: finalTotal,
       };
+      
+      console.log("Creating order with data:", orderDataWithShipping);
       const result = await checkoutMutation.mutateAsync(orderDataWithShipping);
 
       // Process payment with Paystack
@@ -267,9 +270,10 @@ export function Checkout() {
       });
     } catch (error) {
       console.error("Checkout error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
       toast({
         title: "Checkout failed",
-        description: "Please try again or contact support if the problem persists.",
+        description: `${errorMessage}. Please try again or contact support if the problem persists.`,
         variant: "destructive",
       });
     } finally {
@@ -571,6 +575,11 @@ export function Checkout() {
                         <span className="text-sm text-muted-foreground">Powered by</span>
                         <span className="font-bold text-secondary-brand">Paystack</span>
                       </div>
+                    </div>
+                    <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                      <p className="text-sm text-blue-800">
+                        <strong>Test Mode:</strong> Use any test card number (e.g., 4084084084084081) for testing payments. No real money will be charged.
+                      </p>
                     </div>
                   </CardHeader>
                   <CardContent>
