@@ -243,4 +243,5 @@ Preferred communication style: Simple, everyday language.
   - Added test mode notification with test card information on My Orders page
   - Enhanced payment completion flow with proper error handling and success feedback
   - Fixed amount conversion issue for Paystack API (convert to kobo as integer)
-  - Changed payment currency from ZAR to NGN (Nigerian Naira) for Paystack test mode compatibility
+  - Restored payment currency to ZAR (South African Rand) as originally intended for the South African market
+  - Note: Paystack account must be configured to support ZAR currency in dashboard settings

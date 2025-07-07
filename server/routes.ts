@@ -665,9 +665,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Initialize Paystack payment
       const paystackData = await paystackService.initializeTransaction({
-        amount: Math.round(total * 100), // Convert to kobo for NGN
+        amount: Math.round(total * 100), // Convert to cents for ZAR
         email: checkoutData.customerEmail,
-        currency: 'NGN', // Using Nigerian Naira - Paystack's primary supported currency
+        currency: 'ZAR', // Using South African Rand as originally intended
         reference: paystackService.generateReference('ORD'),
         metadata: {
           orderId: order.id,
@@ -1245,9 +1245,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Initialize Paystack transaction
       const transactionData = {
-        amount: Math.round(parseFloat(order.total) * 100), // Convert to kobo for NGN
+        amount: Math.round(parseFloat(order.total) * 100), // Convert to cents for ZAR
         email: order.customerEmail,
-        currency: 'NGN', // Using Nigerian Naira - Paystack's primary supported currency
+        currency: 'ZAR', // Using South African Rand as originally intended
         reference: `${order.orderNumber}_${Date.now()}`,
         callback_url: `${req.protocol}://${req.get('host')}/orders/${orderId}/payment-success`,
         metadata: {

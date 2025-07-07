@@ -205,7 +205,7 @@ export function MyOrders() {
           <p className="text-sm text-blue-800 dark:text-blue-200">
             <strong>Test Mode:</strong> Use test card number 4084084084084081 for payment completion testing. No real charges will be made.
             <br />
-            <strong>Note:</strong> Amounts are processed in Nigerian Naira (NGN) for Paystack compatibility.
+            <strong>Note:</strong> Payments are processed in South African Rand (ZAR). Ensure your Paystack account supports ZAR currency.
           </p>
         </div>
 
