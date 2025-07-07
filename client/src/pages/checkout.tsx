@@ -29,10 +29,19 @@ const checkoutSchema = z.object({
   deliveryMethod: z.enum(["collection", "standard_delivery", "pudo"], {
     required_error: "Please select a delivery method",
   }),
-  pudoLocker: z.string().optional(), // Required when delivery method is pudo
+  pudoLocker: z.string().optional(),
   paymentMethod: z.enum(["card", "bank", "ussd"], {
     required_error: "Please select a payment method",
   }),
+}).refine((data) => {
+  // If delivery method is pudo, pudoLocker must be selected
+  if (data.deliveryMethod === "pudo" && (!data.pudoLocker || data.pudoLocker.trim() === "")) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Please select a Pudo locker for delivery",
+  path: ["pudoLocker"],
 });
 
 type CheckoutFormData = z.infer<typeof checkoutSchema>;
@@ -186,11 +195,35 @@ export function Checkout() {
     },
   });
 
+  // Check if payment should be enabled
+  const isPaymentReady = () => {
+    const deliveryMethod = form.watch("deliveryMethod");
+    const pudoLocker = form.watch("pudoLocker");
+    
+    // For Pudo delivery, ensure a locker is selected
+    if (deliveryMethod === "pudo" && (!pudoLocker || pudoLocker.trim() === "")) {
+      return false;
+    }
+    
+    // Check if form is valid and not calculating shipping
+    return !isCalculatingShipping && cartItems.length > 0;
+  };
+
   const onSubmit = async (data: CheckoutFormData) => {
     if (cartItems.length === 0) {
       toast({
         title: "Cart is empty",
         description: "Please add items to your cart before checkout.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Additional validation for Pudo delivery
+    if (data.deliveryMethod === "pudo" && (!data.pudoLocker || data.pudoLocker.trim() === "")) {
+      toast({
+        title: "Pudo locker required",
+        description: "Please select a Pudo locker for delivery before proceeding with payment.",
         variant: "destructive",
       });
       return;
@@ -585,11 +618,28 @@ export function Checkout() {
                     <Button
                       type="submit"
                       className="w-full bg-primary-brand text-white py-3 text-lg font-semibold hover:bg-primary-brand/90 transition-colors duration-200 mt-6"
-                      disabled={isProcessing || checkoutMutation.isPending}
+                      disabled={isProcessing || checkoutMutation.isPending || !isPaymentReady()}
                       size="lg"
                     >
                       {isProcessing ? "Processing..." : `Pay ${formatPrice(finalTotal)}`}
                     </Button>
+
+                    {/* Show helpful message when payment is disabled due to Pudo requirements */}
+                    {form.watch("deliveryMethod") === "pudo" && (!form.watch("pudoLocker") || form.watch("pudoLocker").trim() === "") && (
+                      <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-md">
+                        <p className="text-sm text-amber-800">
+                          Please select a Pudo locker for delivery before proceeding with payment.
+                        </p>
+                      </div>
+                    )}
+
+                    {isCalculatingShipping && (
+                      <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                        <p className="text-sm text-blue-800">
+                          Calculating shipping costs... Please wait.
+                        </p>
+                      </div>
+                    )}
 
                     <p className="text-xs text-muted-foreground text-center mt-4">
                       Your payment information is encrypted and secure. We never store your card details.
