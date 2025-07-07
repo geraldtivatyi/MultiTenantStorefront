@@ -5,7 +5,7 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { ProductCard } from "@/components/product/product-card";
 import { useTenant } from "@/hooks/use-tenant";
-import { Skeleton } from "@/components/ui/skeleton";
+import { ProductGridSkeleton, PageHeaderSkeleton } from "@/components/skeletons";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle, Truck, Shield, RotateCcw } from "lucide-react";
 import type { Product } from "@shared/schema";
@@ -63,10 +63,7 @@ export function Storefront() {
           <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16 md:py-24">
             <div className="text-center">
               {tenantLoading ? (
-                <div className="space-y-4">
-                  <Skeleton className="h-8 sm:h-12 w-3/4 mx-auto bg-white/20" />
-                  <Skeleton className="h-4 sm:h-6 w-1/2 mx-auto bg-white/20" />
-                </div>
+                <PageHeaderSkeleton />
               ) : (
                 <>
                   <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-4 sm:mb-6 leading-tight">
@@ -118,16 +115,7 @@ export function Storefront() {
             </AlertDescription>
           </Alert>
         ) : productsLoading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 lg:gap-8">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="space-y-4">
-                <Skeleton className="h-48 sm:h-56 w-full" />
-                <Skeleton className="h-4 w-3/4" />
-                <Skeleton className="h-4 w-1/2" />
-                <Skeleton className="h-8 w-1/3" />
-              </div>
-            ))}
-          </div>
+          <ProductGridSkeleton count={8} />
         ) : filteredProducts.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-muted-foreground text-base sm:text-lg px-4">

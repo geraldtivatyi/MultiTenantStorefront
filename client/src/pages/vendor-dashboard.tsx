@@ -34,6 +34,14 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useTenant } from "@/hooks/use-tenant";
+import { 
+  StatsGridSkeleton, 
+  ProductGridSkeleton, 
+  TableSkeleton, 
+  FormSkeleton,
+  ChartSkeleton,
+  PageHeaderSkeleton 
+} from "@/components/skeletons";
 
 export function VendorDashboard() {
   const [activeTab, setActiveTab] = useState<"overview" | "products" | "orders" | "analytics" | "delivery" | "settings">("overview");
@@ -441,8 +449,8 @@ export function VendorDashboard() {
                     </div>
                   </>
                 ) : (
-                  <div className="text-center py-8">
-                    <p className="text-muted-foreground">Loading store statistics...</p>
+                  <div className="space-y-6">
+                    <StatsGridSkeleton count={4} />
                   </div>
                 )}
               </>
@@ -1358,15 +1366,9 @@ function OrdersManagement() {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 bg-gray-200 rounded w-1/4"></div>
-          <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-          <div className="grid gap-4">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="h-24 bg-gray-200 rounded"></div>
-            ))}
-          </div>
-        </div>
+        <PageHeaderSkeleton />
+        <StatsGridSkeleton count={4} />
+        <TableSkeleton rows={5} columns={5} />
       </div>
     );
   }

@@ -11,7 +11,7 @@ import { useCart } from "@/hooks/use-cart";
 import { useToast } from "@/hooks/use-toast";
 import { calculateCartTotal, formatPrice } from "@/lib/utils";
 import { ArrowLeft, ShoppingBag } from "lucide-react";
-import { Skeleton } from "@/components/ui/skeleton";
+import { CartItemSkeleton } from "@/components/skeletons";
 
 export function Cart() {
   const [promoCode, setPromoCode] = useState("");
@@ -42,29 +42,17 @@ export function Cart() {
           <div className="flex flex-col lg:grid lg:grid-cols-3 gap-6 lg:gap-8">
             <div className="lg:col-span-2 space-y-4">
               {Array.from({ length: 3 }).map((_, i) => (
-                <Card key={i}>
-                  <CardContent className="p-4 sm:p-6">
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-4 sm:space-y-0 sm:space-x-4">
-                      <Skeleton className="h-16 w-16 sm:h-20 sm:w-20 flex-shrink-0" />
-                      <div className="flex-1 space-y-2 w-full">
-                        <Skeleton className="h-5 sm:h-6 w-3/4" />
-                        <Skeleton className="h-3 sm:h-4 w-1/2" />
-                        <Skeleton className="h-7 sm:h-8 w-1/4" />
-                      </div>
-                      <Skeleton className="h-5 sm:h-6 w-16 sm:w-20" />
-                    </div>
-                  </CardContent>
-                </Card>
+                <CartItemSkeleton key={i} />
               ))}
             </div>
             <div className="order-first lg:order-last">
               <Card>
                 <CardContent className="p-4 sm:p-6">
                   <div className="space-y-4">
-                    <Skeleton className="h-5 sm:h-6 w-full" />
-                    <Skeleton className="h-3 sm:h-4 w-3/4" />
-                    <Skeleton className="h-3 sm:h-4 w-3/4" />
-                    <Skeleton className="h-10 sm:h-12 w-full" />
+                    <div className="h-5 bg-muted animate-pulse rounded w-full" />
+                    <div className="h-3 bg-muted animate-pulse rounded w-3/4" />
+                    <div className="h-3 bg-muted animate-pulse rounded w-3/4" />
+                    <div className="h-10 bg-muted animate-pulse rounded w-full" />
                   </div>
                 </CardContent>
               </Card>

@@ -25,6 +25,7 @@ import {
   XCircle,
   Send
 } from "lucide-react";
+import { StatsGridSkeleton, TableSkeleton, FormSkeleton } from "@/components/skeletons";
 
 function TenantsTab() {
   const { toast } = useToast();

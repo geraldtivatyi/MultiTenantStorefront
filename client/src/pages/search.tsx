@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
+import { SearchResultsSkeleton, ProductGridSkeleton } from "@/components/skeletons";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Search as SearchIcon, Filter, SlidersHorizontal, Grid, List, ArrowUpDown } from "lucide-react";
 import type { Product } from "@shared/schema";
@@ -307,21 +307,7 @@ export function Search() {
 
             {/* Products Grid/List */}
             {productsLoading ? (
-              <div className={viewMode === 'grid' 
-                ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
-                : "space-y-4"
-              }>
-                {Array.from({ length: 8 }).map((_, i) => (
-                  <Card key={i}>
-                    <CardContent className="p-4">
-                      <Skeleton className="h-48 w-full mb-4" />
-                      <Skeleton className="h-6 w-3/4 mb-2" />
-                      <Skeleton className="h-4 w-1/2 mb-2" />
-                      <Skeleton className="h-8 w-1/3" />
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+              <ProductGridSkeleton count={8} />
             ) : filteredProducts.length === 0 ? (
               <div className="text-center py-16">
                 <SearchIcon className="h-24 w-24 text-muted-foreground mx-auto mb-4" />
