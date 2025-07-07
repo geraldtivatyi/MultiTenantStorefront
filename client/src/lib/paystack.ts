@@ -69,16 +69,32 @@ export class PaystackService {
       throw new Error('Paystack not initialized');
     }
 
-    const handler = window.PaystackPop.setup({
+    if (!window.PaystackPop) {
+      throw new Error('Paystack script not loaded');
+    }
+
+    console.log('Setting up Paystack payment:', {
       key: this.config.publicKey,
       email,
-      amount: Math.round(amount * 100), // Convert to kobo
-      reference,
-      callback: onSuccess,
-      onClose: onCancel,
+      amount: Math.round(amount * 100),
+      reference
     });
 
-    handler.openIframe();
+    try {
+      const handler = window.PaystackPop.setup({
+        key: this.config.publicKey,
+        email,
+        amount: Math.round(amount * 100), // Convert to cents for USD
+        reference,
+        callback: onSuccess,
+        onClose: onCancel,
+      });
+
+      handler.openIframe();
+    } catch (error) {
+      console.error('Error setting up Paystack:', error);
+      throw new Error(`Paystack setup failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 
   getPublicKey(): string {

@@ -122,9 +122,11 @@ export function MyOrders() {
       });
     } catch (error) {
       console.error("Payment completion error:", error);
+      console.error("Error details:", error instanceof Error ? error.message : 'Unknown error');
+      console.error("Error stack:", error instanceof Error ? error.stack : 'No stack trace');
       toast({
         title: "Error",
-        description: "Failed to initialize payment. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to initialize payment. Please try again.",
         variant: "destructive",
       });
     } finally {
