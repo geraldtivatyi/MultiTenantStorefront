@@ -665,9 +665,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Initialize Paystack payment
       const paystackData = await paystackService.initializeTransaction({
-        amount: Math.round(total * 100), // Convert to kobo (integer)
+        amount: Math.round(total * 100), // Convert to cents for USD
         email: checkoutData.customerEmail,
-        currency: 'NGN', // Changed to Nigerian Naira for Paystack compatibility
+        currency: 'USD', // Using USD for Paystack test mode compatibility
         reference: paystackService.generateReference('ORD'),
         metadata: {
           orderId: order.id,
@@ -1245,9 +1245,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Initialize Paystack transaction
       const transactionData = {
-        amount: Math.round(parseFloat(order.total) * 100), // Convert to kobo
+        amount: Math.round(parseFloat(order.total) * 100), // Convert to cents for USD
         email: order.customerEmail,
-        currency: 'NGN', // Changed to Nigerian Naira for Paystack compatibility
+        currency: 'USD', // Using USD for Paystack test mode compatibility
         reference: `${order.orderNumber}_${Date.now()}`,
         callback_url: `${req.protocol}://${req.get('host')}/orders/${orderId}/payment-success`,
         metadata: {

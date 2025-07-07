@@ -243,4 +243,4 @@ Preferred communication style: Simple, everyday language.
   - Added test mode notification with test card information on My Orders page
   - Enhanced payment completion flow with proper error handling and success feedback
   - Fixed amount conversion issue for Paystack API (convert to kobo as integer)
-  - Changed payment currency from ZAR to NGN for Paystack compatibility in test mode
+  - Changed payment currency from ZAR to USD for Paystack test mode compatibility (test account limitations)
