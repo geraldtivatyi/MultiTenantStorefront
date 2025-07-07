@@ -1259,8 +1259,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const paystackResponse = await paystackService.initializeTransaction(transactionData);
       
-      if (!paystackResponse.status) {
-        throw new Error(paystackResponse.message || 'Failed to initialize payment');
+      // Check if the response has the expected structure
+      if (!paystackResponse.status || !paystackResponse.data) {
+        throw new Error('Invalid response from Paystack API');
       }
 
       res.json({

@@ -51,6 +51,8 @@ export class PaystackService {
 
   async initializeTransaction(data: PaystackTransactionData): Promise<any> {
     try {
+      console.log('Initializing Paystack transaction with data:', data);
+      
       const response = await fetch('https://api.paystack.co/transaction/initialize', {
         method: 'POST',
         headers: {
@@ -61,12 +63,15 @@ export class PaystackService {
       });
 
       const result = await response.json();
+      console.log('Paystack API response:', result);
 
       if (!response.ok) {
+        console.error('Paystack API error:', result);
         throw new Error(result.message || 'Failed to initialize transaction');
       }
 
-      return result.data;
+      // Return the full result object as it contains status and data
+      return result;
     } catch (error) {
       console.error('Paystack initialization error:', error);
       throw new Error('Failed to initialize payment');
