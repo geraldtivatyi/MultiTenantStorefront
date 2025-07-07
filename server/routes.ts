@@ -665,7 +665,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Initialize Paystack payment
       const paystackData = await paystackService.initializeTransaction({
-        amount: total,
+        amount: Math.round(total * 100), // Convert to kobo (integer)
         email: checkoutData.customerEmail,
         currency: 'ZAR',
         reference: paystackService.generateReference('ORD'),
@@ -674,6 +674,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           tenantId: req.tenant.id,
         },
       });
+
+      console.log('Paystack response:', paystackData);
 
       // Update order with Paystack reference
       await storage.updateOrderStatus(order.id, 'pending');
