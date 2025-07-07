@@ -20,8 +20,17 @@ import { Search } from "@/pages/search";
 import { Login } from "@/pages/login";
 import { Register } from "@/pages/register";
 import NotFound from "@/pages/not-found";
+import { useAuth } from "@/hooks/useAuth";
+import { AuthLoadingScreen } from "@/components/skeletons";
 
 function Router() {
+  const { isLoading } = useAuth();
+
+  // Show loading screen during initial authentication check
+  if (isLoading) {
+    return <AuthLoadingScreen message="Loading application..." />;
+  }
+
   return (
     <Switch>
       <Route path="/" component={Storefront} />

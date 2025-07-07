@@ -200,6 +200,23 @@ export function ChartSkeleton() {
   );
 }
 
+// Auth Loading Screen
+export function AuthLoadingScreen({ message }: { message: string }) {
+  return (
+    <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50">
+      <div className="bg-card p-8 rounded-lg border shadow-lg max-w-md w-full mx-4">
+        <div className="flex flex-col items-center space-y-4">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          <div className="text-center">
+            <h3 className="text-lg font-semibold text-foreground">{message}</h3>
+            <p className="text-sm text-muted-foreground mt-2">Please wait...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Search Results Skeleton
 export function SearchResultsSkeleton() {
   return (

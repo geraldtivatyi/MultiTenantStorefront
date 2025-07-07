@@ -10,6 +10,7 @@ import { useTenant } from "@/hooks/use-tenant";
 import { useCart } from "@/hooks/use-cart";
 import { useAuth } from "@/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
+import { AuthLoadingScreen } from "@/components/skeletons";
 
 export function Header() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -20,7 +21,9 @@ export function Header() {
   const { user, isAuthenticated, logout, isLoggingOut } = useAuth();
 
   return (
-    <header className="bg-white shadow-sm border-b border-gray-200">
+    <>
+      {isLoggingOut && <AuthLoadingScreen message="Signing out..." />}
+      <header className="bg-white shadow-sm border-b border-gray-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
@@ -401,5 +404,6 @@ export function Header() {
         </div>
       </div>
     </header>
+    </>
   );
 }

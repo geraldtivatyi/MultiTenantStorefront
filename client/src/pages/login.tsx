@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useTenant } from "@/hooks/use-tenant";
 import { LogIn, User, Lock, AlertCircle } from "lucide-react";
+import { AuthLoadingScreen } from "@/components/skeletons";
 
 const loginSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
@@ -84,7 +85,9 @@ export function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-brand/5 to-purple-100 flex items-center justify-center p-4">
+    <>
+      {loginMutation.isPending && <AuthLoadingScreen message="Signing in..." />}
+      <div className="min-h-screen bg-gradient-to-br from-primary-brand/5 to-purple-100 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <Link href="/" className="inline-block">
@@ -210,5 +213,6 @@ export function Login() {
         </div>
       </div>
     </div>
+    </>
   );
 }

@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useTenant } from "@/hooks/use-tenant";
 import { UserPlus, User, Mail, Lock, AlertCircle, Phone, IdCard } from "lucide-react";
+import { AuthLoadingScreen } from "@/components/skeletons";
 
 const registerSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters").max(50, "Username must be less than 50 characters"),
@@ -95,7 +96,9 @@ export function Register() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-brand/5 to-purple-100 flex items-center justify-center p-4">
+    <>
+      {registerMutation.isPending && <AuthLoadingScreen message="Creating your account..." />}
+      <div className="min-h-screen bg-gradient-to-br from-primary-brand/5 to-purple-100 flex items-center justify-center p-4">
       <div className="w-full max-w-lg">
         <div className="text-center mb-8">
           <Link href="/" className="inline-block">
@@ -322,5 +325,6 @@ export function Register() {
         </Card>
       </div>
     </div>
+    </>
   );
 }
