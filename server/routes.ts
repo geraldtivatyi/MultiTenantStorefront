@@ -1295,8 +1295,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: 'Order not found' });
       }
 
-      // Verify user owns this order (using email for now)
-      if (order.customerEmail !== req.user?.email) {
+      // Verify user has access to this order (check if order belongs to current tenant)
+      if (!req.tenant || order.tenantId !== req.tenant.id) {
         return res.status(403).json({ error: 'Access denied' });
       }
 
