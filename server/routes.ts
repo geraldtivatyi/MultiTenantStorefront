@@ -1720,6 +1720,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Contact form endpoint
+  app.post('/api/contact', async (req, res) => {
+    try {
+      const { name, email, subject, message } = req.body;
+
+      if (!name || !email || !subject || !message) {
+        return res.status(400).json({ error: 'All fields are required' });
+      }
+
+      // Import email service
+      const { emailService } = await import('./services/email');
+
+      // Send email notification
+      const emailSent = await emailService.sendEmail({
+        to: 'geraldtivatyi@gmail.com',
+        subject: `Contact Form: ${subject}`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #333; border-bottom: 2px solid #f0f0f0; padding-bottom: 10px;">
+              New Contact Form Submission
+            </h2>
+            
+            <div style="background-color: #f9f9f9; padding: 20px; border-radius: 8px; margin: 20px 0;">
+              <h3 style="color: #555; margin-top: 0;">Contact Details</h3>
+              <p><strong>Name:</strong> ${name}</p>
+              <p><strong>Email:</strong> ${email}</p>
+              <p><strong>Subject:</strong> ${subject}</p>
+            </div>
+            
+            <div style="background-color: #fff; padding: 20px; border-left: 4px solid #007bff; margin: 20px 0;">
+              <h3 style="color: #555; margin-top: 0;">Message</h3>
+              <p style="line-height: 1.6; color: #333;">${message.replace(/\n/g, '<br>')}</p>
+            </div>
+            
+            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #666; font-size: 12px;">
+              <p>This email was sent from the Creative Crafts Studio contact form.</p>
+            </div>
+          </div>
+        `,
+        text: `
+New Contact Form Submission
+
+Name: ${name}
+Email: ${email}
+Subject: ${subject}
+
+Message:
+${message}
+        `,
+      });
+
+      if (emailSent) {
+        res.json({ success: true, message: 'Contact form submitted successfully' });
+      } else {
+        res.status(500).json({ error: 'Failed to send email notification' });
+      }
+    } catch (error) {
+      console.error('Contact form error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
