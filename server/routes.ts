@@ -1732,6 +1732,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Import email service
       const { emailService } = await import('./services/email');
 
+      console.log('SENDGRID_FROM_EMAIL:', process.env.SENDGRID_FROM_EMAIL);
+      console.log('Available env vars:', Object.keys(process.env).filter(k => k.includes('SENDGRID')));
+
       // Send email notification
       const emailSent = await emailService.sendEmail({
         to: 'geraldtivatyi@gmail.com',

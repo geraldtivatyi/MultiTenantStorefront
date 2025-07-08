@@ -36,7 +36,7 @@ export class EmailService {
   constructor() {
     this.config = {
       apiKey: process.env.SENDGRID_API_KEY || '',
-      fromEmail: process.env.FROM_EMAIL || 'noreply@geraldtivatyi.com',
+      fromEmail: process.env.SENDGRID_FROM_EMAIL || process.env.FROM_EMAIL || 'noreply@geraldtivatyi.com',
       fromName: process.env.FROM_NAME || 'Your E-commerce Platform',
     };
 
