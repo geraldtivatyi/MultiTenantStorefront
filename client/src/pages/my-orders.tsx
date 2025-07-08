@@ -231,9 +231,7 @@ export function MyOrders() {
         {/* Test Mode Notice */}
         <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-md dark:bg-blue-900/20 dark:border-blue-800">
           <p className="text-sm text-blue-800 dark:text-blue-200">
-            <strong>Test Mode:</strong> Use test card number 4084084084084081 for payment completion testing. No real charges will be made.
-            <br />
-            <strong>Note:</strong> Payments are processed in South African Rand (ZAR). Ensure your Paystack account supports ZAR currency.
+            <strong>Test Mode:</strong> No actual payments will be processed.
           </p>
         </div>
 

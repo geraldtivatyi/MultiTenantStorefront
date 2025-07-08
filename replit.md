@@ -253,3 +253,14 @@ Preferred communication style: Simple, everyday language.
   - Enhanced order status filtering to include "cancelled" option
   - Implemented proper error handling and user feedback for cancellation process
   - Orders show appropriate visual indicators when cancelled
+- July 8, 2025: Fixed phone number update issue in Profile Information:
+  - Added phone field to auth status endpoint response
+  - Phone field was missing from user object returned by authentication system
+  - Profile form now properly saves and displays phone numbers alongside other user data
+- July 8, 2025: Implemented user-specific order filtering for My Orders page:
+  - Added userId field to orders table schema to link orders to authenticated users
+  - Updated checkout process to capture authenticated user ID when placing orders
+  - Added getOrdersByUser method to filter orders by user and tenant
+  - My Orders page now shows only orders placed by the current user instead of all tenant orders
+  - Updated database relations to properly link users and orders
+  - Simplified test mode message to just indicate test mode with no actual payments processed
