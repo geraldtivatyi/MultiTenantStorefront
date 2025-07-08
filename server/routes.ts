@@ -217,6 +217,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         email: req.user.email,
         firstName: req.user.firstName,
         lastName: req.user.lastName,
+        phone: req.user.phone,
         role: req.user.role,
         tenantId: req.user.tenantId,
         isAdmin: req.user.isAdmin
