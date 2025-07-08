@@ -115,6 +115,7 @@ export const cartItems = pgTable("cart_items", {
 export const orders = pgTable("orders", {
   id: serial("id").primaryKey(),
   tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  userId: integer("user_id").references(() => users.id), // Optional - for authenticated users
   orderNumber: text("order_number").notNull().unique(),
   customerEmail: text("customer_email").notNull(),
   customerName: text("customer_name").notNull(),
@@ -169,6 +170,7 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   sessions: many(userSessions),
   addresses: many(userAddresses),
   preferences: one(userPreferences),
+  orders: many(orders),
 }));
 
 export const userSessionsRelations = relations(userSessions, ({ one }) => ({
@@ -198,6 +200,10 @@ export const ordersRelations = relations(orders, ({ one, many }) => ({
   tenant: one(tenants, {
     fields: [orders.tenantId],
     references: [tenants.id],
+  }),
+  user: one(users, {
+    fields: [orders.userId],
+    references: [users.id],
   }),
   orderItems: many(orderItems),
   paymentTransactions: many(paymentTransactions),

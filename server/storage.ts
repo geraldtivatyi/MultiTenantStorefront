@@ -71,6 +71,7 @@ export interface IStorage {
   // Order management
   getOrder(id: number): Promise<Order | undefined>;
   getOrdersByTenant(tenantId: number): Promise<Order[]>;
+  getOrdersByUser(userId: number, tenantId: number): Promise<Order[]>;
   createOrder(order: InsertOrder): Promise<Order>;
   updateOrderStatus(id: number, status: string): Promise<Order | undefined>;
 
@@ -283,6 +284,12 @@ export class DatabaseStorage implements IStorage {
   async getOrdersByTenant(tenantId: number): Promise<Order[]> {
     return await db.select().from(orders)
       .where(eq(orders.tenantId, tenantId))
+      .orderBy(desc(orders.createdAt));
+  }
+
+  async getOrdersByUser(userId: number, tenantId: number): Promise<Order[]> {
+    return await db.select().from(orders)
+      .where(and(eq(orders.userId, userId), eq(orders.tenantId, tenantId)))
       .orderBy(desc(orders.createdAt));
   }
 

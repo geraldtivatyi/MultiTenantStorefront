@@ -620,6 +620,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const sessionId = req.headers['x-session-id'] as string || 'anonymous';
       const checkoutData = checkoutSchema.parse(req.body);
+      const userId = req.user?.id; // Optional - will be null for guest users
 
       // Get cart items
       const cartItems = await storage.getCartItems(sessionId, req.tenant.id);
@@ -638,6 +639,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create order with delivery information
       const orderData = insertOrderSchema.parse({
         tenantId: req.tenant.id,
+        userId: userId || undefined, // Link to authenticated user if available
         customerEmail: checkoutData.customerEmail,
         customerName: checkoutData.customerName,
         shippingAddress: checkoutData.shippingAddress,
@@ -1150,8 +1152,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Tenant not found' });
       }
       
-      // Get all orders for the tenant (in a real app, this would be filtered by user)
-      const orders = await storage.getOrdersByTenant(req.tenant.id);
+      const userId = req.user!.id;
+      
+      // Get orders for the authenticated user only
+      const orders = await storage.getOrdersByUser(userId, req.tenant.id);
       res.json(orders);
     } catch (error) {
       console.error('Get orders error:', error);
