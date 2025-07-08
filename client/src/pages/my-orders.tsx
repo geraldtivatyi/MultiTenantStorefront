@@ -45,6 +45,7 @@ export function MyOrders() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [processingPayments, setProcessingPayments] = useState<Set<number>>(new Set());
+  const [cancellingOrders, setCancellingOrders] = useState<Set<number>>(new Set());
   const { toast } = useToast();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const queryClient = useQueryClient();
@@ -132,6 +133,33 @@ export function MyOrders() {
     } finally {
       // Remove order from processing set
       setProcessingPayments(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(orderId);
+        return newSet;
+      });
+    }
+  };
+
+  // Cancel order function
+  const cancelOrder = async (orderId: number, orderNumber: string) => {
+    setCancellingOrders(prev => new Set(prev).add(orderId));
+    
+    try {
+      await apiRequest(`/api/orders/${orderId}/cancel`, "POST");
+      toast({
+        title: "Order cancelled",
+        description: `Order ${orderNumber} has been cancelled successfully.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/my-orders'] });
+    } catch (error) {
+      console.error("Cancel order error:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to cancel order. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setCancellingOrders(prev => {
         const newSet = new Set(prev);
         newSet.delete(orderId);
         return newSet;
@@ -360,15 +388,27 @@ export function MyOrders() {
                           </Button>
                         </CollapsibleTrigger>
                         {order.status === 'pending' && (
-                          <Button 
-                            size="sm"
-                            onClick={() => completePayment(order.id, order)}
-                            disabled={processingPayments.has(order.id)}
-                            className="bg-primary-brand hover:bg-primary-brand/90"
-                          >
-                            <CreditCard className="h-4 w-4 mr-2" />
-                            {processingPayments.has(order.id) ? "Processing..." : "Complete Payment"}
-                          </Button>
+                          <>
+                            <Button 
+                              size="sm"
+                              onClick={() => completePayment(order.id, order)}
+                              disabled={processingPayments.has(order.id)}
+                              className="bg-primary-brand hover:bg-primary-brand/90"
+                            >
+                              <CreditCard className="h-4 w-4 mr-2" />
+                              {processingPayments.has(order.id) ? "Processing..." : "Complete Payment"}
+                            </Button>
+                            <Button 
+                              size="sm"
+                              variant="outline"
+                              onClick={() => cancelOrder(order.id, order.orderNumber)}
+                              disabled={cancellingOrders.has(order.id)}
+                              className="text-red-600 border-red-300 hover:bg-red-50 dark:text-red-400 dark:border-red-600 dark:hover:bg-red-900/20"
+                            >
+                              <XCircle className="h-4 w-4 mr-2" />
+                              {cancellingOrders.has(order.id) ? "Cancelling..." : "Cancel Order"}
+                            </Button>
+                          </>
                         )}
                         <Button 
                           variant="outline" 

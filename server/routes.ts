@@ -1281,6 +1281,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  // Cancel order
+  app.post('/api/orders/:orderId/cancel', requireAuth, async (req: TenantRequest, res) => {
+    try {
+      const orderId = parseInt(req.params.orderId);
+      if (!orderId) {
+        return res.status(400).json({ error: 'Invalid order ID' });
+      }
+
+      // Get order to verify ownership and status
+      const order = await storage.getOrder(orderId);
+      if (!order) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+
+      // Verify user owns this order (using email for now)
+      if (order.customerEmail !== req.user?.email) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
+      // Check if order can be cancelled (only pending orders can be cancelled)
+      if (order.status !== 'pending') {
+        return res.status(400).json({ error: 'Only pending orders can be cancelled' });
+      }
+
+      // Update order status to cancelled
+      const updatedOrder = await storage.updateOrderStatus(orderId, 'cancelled');
+      if (!updatedOrder) {
+        return res.status(500).json({ error: 'Failed to cancel order' });
+      }
+
+      res.json({ message: 'Order cancelled successfully', order: updatedOrder });
+    } catch (error) {
+      console.error('Error cancelling order:', error);
+      res.status(500).json({ error: 'Failed to cancel order' });
+    }
+  });
+
   // Admin routes
   app.get('/api/admin/tenants', async (req, res) => {
     try {

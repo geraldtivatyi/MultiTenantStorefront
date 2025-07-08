@@ -246,3 +246,10 @@ Preferred communication style: Simple, everyday language.
   - Restored payment currency to ZAR (South African Rand) as originally intended for the South African market
   - Successfully resolved Paystack API compatibility by updating to user's ZAR-enabled Paystack account credentials
   - Payment popup now works correctly with ZAR currency for South African market
+- July 7, 2025: Added comprehensive order cancellation functionality:
+  - Created cancel order API endpoint with proper authentication and validation
+  - Only pending orders can be cancelled to prevent abuse
+  - Added cancel order button to My Orders page with loading states
+  - Enhanced order status filtering to include "cancelled" option
+  - Implemented proper error handling and user feedback for cancellation process
+  - Orders show appropriate visual indicators when cancelled
