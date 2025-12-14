@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { useTenant } from "@/hooks/use-tenant";
+import { useStoreSettings } from "@/hooks/use-store-settings";
 import { LogIn, User, Lock, AlertCircle } from "lucide-react";
 import { AuthLoadingScreen } from "@/components/skeletons";
 
@@ -24,7 +24,7 @@ type LoginFormData = z.infer<typeof loginSchema>;
 export function Login() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const { data: tenant } = useTenant();
+  const { data: storeSettings } = useStoreSettings();
   const [showPassword, setShowPassword] = useState(false);
 
   const form = useForm<LoginFormData>({
@@ -50,8 +50,6 @@ export function Login() {
       let welcomeMessage = "You have been successfully logged in.";
       if (user && user.role === 'platform_admin') {
         welcomeMessage = "Welcome back, Platform Administrator!";
-      } else if (user && user.role === 'tenant_owner') {
-        welcomeMessage = "Welcome back to your vendor dashboard!";
       }
       
       toast({
@@ -66,10 +64,14 @@ export function Login() {
     onError: (error: any) => {
       let message = "Login failed. Please try again.";
       
-      if (error.message.includes("INVALID_CREDENTIALS")) {
-        message = "Invalid email or password. Please check your credentials.";
-      } else if (error.message.includes("ACCOUNT_DISABLED")) {
+      // Check error code first (cleaner)
+      if (error.code === "INVALID_CREDENTIALS") {
+        message = "Invalid email or password. Please check your credentials and try again.";
+      } else if (error.code === "ACCOUNT_DISABLED") {
         message = "Your account has been disabled. Please contact support.";
+      } else if (error.message) {
+        // Use the error message from the API (already cleaned by throwIfResNotOk)
+        message = error.message;
       }
       
       toast({
@@ -92,7 +94,7 @@ export function Login() {
         <div className="text-center mb-8">
           <Link href="/" className="inline-block">
             <h1 className="text-3xl font-bold text-primary-brand mb-2">
-              {tenant?.name || "Creative Crafts Studio"}
+              {storeSettings?.name || "M Blessings"}
             </h1>
           </Link>
           <p className="text-muted-foreground">
@@ -166,6 +168,12 @@ export function Login() {
                   )}
                 />
 
+                <div className="flex items-center justify-between">
+                  <Link href="/forgot-password" className="text-sm text-primary-brand hover:underline">
+                    Forgot password?
+                  </Link>
+                </div>
+
                 <Button 
                   type="submit" 
                   className="w-full" 
@@ -199,18 +207,6 @@ export function Login() {
             </div>
           </CardContent>
         </Card>
-
-        {/* Demo Account Info */}
-        <div className="mt-6 p-4 bg-muted/50 rounded-lg border">
-          <h3 className="font-medium text-sm mb-2">Demo Account</h3>
-          <p className="text-xs text-muted-foreground mb-2">
-            You can use this demo account to test the platform:
-          </p>
-          <div className="text-xs font-mono space-y-1">
-            <div><strong>Email:</strong> demo@creativecrafts.co.za</div>
-            <div><strong>Password:</strong> demo123</div>
-          </div>
-        </div>
       </div>
     </div>
     </>

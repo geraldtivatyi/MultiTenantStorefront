@@ -1,11 +1,68 @@
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
-import { useTenant } from "@/hooks/use-tenant";
-import { Heart, Users, Award, Truck } from "lucide-react";
+import { useStoreSettings } from "@/hooks/use-store-settings";
+import { Heart, Users, Award, Truck, LucideIcon } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
+// Helper function to get icon component by name
+function getIconComponent(iconName?: string): LucideIcon {
+  const iconMap: Record<string, LucideIcon> = {
+    heart: Heart,
+    users: Users,
+    award: Award,
+    truck: Truck,
+  };
+  return iconMap[iconName?.toLowerCase() || ''] || Heart;
+}
+
+// Default values for fallback
+const defaultValues = [
+  {
+    title: "Style",
+    description: "We're passionate about fashion and committed to helping you express your unique style.",
+    icon: "heart"
+  },
+  {
+    title: "Quality",
+    description: "Every garment is carefully selected to ensure it meets our high standards for quality and comfort.",
+    icon: "award"
+  },
+  {
+    title: "Trends",
+    description: "Stay ahead of fashion trends with our curated collection of the latest styles.",
+    icon: "users"
+  },
+  {
+    title: "Service",
+    description: "Fast shipping, easy returns, and friendly customer support make shopping with us a pleasure.",
+    icon: "truck"
+  }
+];
+
+const defaultStats = {
+  products: "500+",
+  customers: "10k+",
+  orders: "50k+",
+  satisfaction: "99%"
+};
+
+const defaultImages = [
+  'https://images.unsplash.com/photo-1441986300917-64674bd600d8?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&h=400',
+  'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&h=300'
+];
+
 export function About() {
-  const { data: tenant, isLoading } = useTenant();
+  const { data: storeSettings, isLoading } = useStoreSettings();
+  
+  // Get store data with fallbacks
+  const aboutStory = storeSettings?.aboutStory || "Welcome to M Blessings! We're dedicated to providing quality products and excellent service to our valued customers.";
+  const aboutValues = storeSettings?.aboutValues && Array.isArray(storeSettings.aboutValues) && storeSettings.aboutValues.length > 0 
+    ? storeSettings.aboutValues 
+    : defaultValues;
+  const aboutStats = storeSettings?.aboutStats || defaultStats;
+  const aboutImages = storeSettings?.aboutImages && Array.isArray(storeSettings.aboutImages) && storeSettings.aboutImages.length > 0
+    ? storeSettings.aboutImages
+    : defaultImages;
 
   return (
     <div className="min-h-screen bg-background">
@@ -22,11 +79,10 @@ export function About() {
           ) : (
             <>
               <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-6">
-                About {tenant?.name || "Our Store"}
+                About {storeSettings?.name || "Our Store"}
               </h1>
               <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
-                Bringing creativity and inspiration to artists and crafters worldwide through 
-                high-quality materials and passionate expertise.
+                {storeSettings?.description || "Welcome to M Blessings! We're dedicated to providing quality products and excellent service to our valued customers."}
               </p>
             </>
           )}
@@ -37,109 +93,74 @@ export function About() {
           <div>
             <h2 className="text-3xl font-bold text-foreground mb-6">Our Story</h2>
             <div className="space-y-4 text-muted-foreground">
-              <p>
-                Founded in 2020, Creative Crafts Studio began as a small passion project 
-                between two friends who shared a love for handmade arts and crafts. What 
-                started in a garage workshop has grown into a trusted destination for 
-                creative minds seeking quality materials and inspiration.
-              </p>
-              <p>
-                We believe that creativity knows no bounds, and everyone deserves access 
-                to the tools and materials needed to bring their artistic visions to life. 
-                From professional artists to weekend hobbyists, we serve a diverse community 
-                united by the joy of creating.
-              </p>
-              <p>
-                Today, we're proud to offer over 500 premium crafting products, from 
-                traditional art supplies to innovative crafting tools, all carefully 
-                curated to meet the needs of our creative community.
-              </p>
+              {aboutStory.split('\n\n').map((paragraph, index) => (
+                <p key={index}>{paragraph}</p>
+              ))}
             </div>
           </div>
           <div className="space-y-6">
-            <div 
-              className="h-64 bg-cover bg-center rounded-lg"
-              style={{
-                backgroundImage: "url('https://images.unsplash.com/photo-1513475382585-d06e58bcb0e0?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&h=400')"
-              }}
-            />
-            <div 
-              className="h-48 bg-cover bg-center rounded-lg"
-              style={{
-                backgroundImage: "url('https://images.unsplash.com/photo-1578321272176-b7bbc0679853?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&h=300')"
-              }}
-            />
+            {aboutImages.map((imageUrl, index) => (
+              <div 
+                key={index}
+                className={`bg-cover bg-center rounded-lg ${index === 0 ? 'h-64' : 'h-48'}`}
+                style={{
+                  backgroundImage: `url('${imageUrl}')`
+                }}
+              />
+            ))}
           </div>
         </div>
 
         {/* Values Section */}
         <div className="mb-16">
           <h2 className="text-3xl font-bold text-foreground text-center mb-12">Our Values</h2>
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-primary-brand/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Heart className="h-8 w-8 text-primary-brand" />
-              </div>
-              <h3 className="text-xl font-semibold text-foreground mb-2">Passion</h3>
-              <p className="text-muted-foreground">
-                We're passionate about crafting and committed to helping others discover 
-                the joy of creating with their hands.
-              </p>
-            </div>
-            <div className="text-center">
-              <div className="w-16 h-16 bg-primary-brand/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Award className="h-8 w-8 text-primary-brand" />
-              </div>
-              <h3 className="text-xl font-semibold text-foreground mb-2">Quality</h3>
-              <p className="text-muted-foreground">
-                Every product is carefully selected and tested to ensure it meets our 
-                high standards for quality and durability.
-              </p>
-            </div>
-            <div className="text-center">
-              <div className="w-16 h-16 bg-primary-brand/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Users className="h-8 w-8 text-primary-brand" />
-              </div>
-              <h3 className="text-xl font-semibold text-foreground mb-2">Community</h3>
-              <p className="text-muted-foreground">
-                We're more than a store – we're a community of creators supporting 
-                each other's artistic journeys.
-              </p>
-            </div>
-            <div className="text-center">
-              <div className="w-16 h-16 bg-primary-brand/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Truck className="h-8 w-8 text-primary-brand" />
-              </div>
-              <h3 className="text-xl font-semibold text-foreground mb-2">Service</h3>
-              <p className="text-muted-foreground">
-                Fast shipping, easy returns, and friendly customer support make 
-                shopping with us a pleasure.
-              </p>
-            </div>
+          <div className={`grid md:grid-cols-2 ${aboutValues.length > 2 ? 'lg:grid-cols-4' : 'lg:grid-cols-2'} gap-8`}>
+            {aboutValues.map((value, index) => {
+              const IconComponent = getIconComponent(value.icon);
+              return (
+                <div key={index} className="text-center">
+                  <div className="w-16 h-16 bg-primary-brand/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <IconComponent className="h-8 w-8 text-primary-brand" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-foreground mb-2">{value.title}</h3>
+                  <p className="text-muted-foreground">{value.description}</p>
+                </div>
+              );
+            })}
           </div>
         </div>
 
         {/* Stats Section */}
-        <div className="bg-gradient-to-r from-primary-brand to-purple-600 rounded-lg p-8 text-white">
-          <div className="grid md:grid-cols-4 gap-8 text-center">
-            <div>
-              <div className="text-3xl md:text-4xl font-bold mb-2">500+</div>
-              <div className="text-lg opacity-90">Products</div>
-            </div>
-            <div>
-              <div className="text-3xl md:text-4xl font-bold mb-2">10k+</div>
-              <div className="text-lg opacity-90">Happy Customers</div>
-            </div>
-            <div>
-              <div className="text-3xl md:text-4xl font-bold mb-2">50k+</div>
-              <div className="text-lg opacity-90">Orders Shipped</div>
-            </div>
-            <div>
-              <div className="text-3xl md:text-4xl font-bold mb-2">99%</div>
-              <div className="text-lg opacity-90">Customer Satisfaction</div>
+        {aboutStats && (
+          <div className="bg-gradient-to-r from-primary-brand to-purple-600 rounded-lg p-8 text-white">
+            <div className="grid md:grid-cols-4 gap-8 text-center">
+              {aboutStats.products && (
+                <div>
+                  <div className="text-3xl md:text-4xl font-bold mb-2">{aboutStats.products}</div>
+                  <div className="text-lg opacity-90">Products</div>
+                </div>
+              )}
+              {aboutStats.customers && (
+                <div>
+                  <div className="text-3xl md:text-4xl font-bold mb-2">{aboutStats.customers}</div>
+                  <div className="text-lg opacity-90">Happy Customers</div>
+                </div>
+              )}
+              {aboutStats.orders && (
+                <div>
+                  <div className="text-3xl md:text-4xl font-bold mb-2">{aboutStats.orders}</div>
+                  <div className="text-lg opacity-90">Orders Shipped</div>
+                </div>
+              )}
+              {aboutStats.satisfaction && (
+                <div>
+                  <div className="text-3xl md:text-4xl font-bold mb-2">{aboutStats.satisfaction}</div>
+                  <div className="text-lg opacity-90">Customer Satisfaction</div>
+                </div>
+              )}
             </div>
           </div>
-        </div>
+        )}
       </main>
       
       <Footer />

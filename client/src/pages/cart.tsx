@@ -97,10 +97,6 @@ export function Cart() {
                       <span>Shipping</span>
                       <span className="text-secondary-brand">Free</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span>Tax</span>
-                      <span>{formatPrice(tax)}</span>
-                    </div>
                     {discount > 0 && (
                       <div className="flex justify-between text-secondary-brand">
                         <span>Discount ({promoCode})</span>
@@ -138,13 +134,13 @@ export function Cart() {
                         variant="outline"
                         onClick={() => {
                           const code = promoCode.toUpperCase();
-                          if (code === 'CRAFT10') {
+                          if (code === 'FASHION10') {
                             setDiscount(subtotal * 0.1);
                             toast({
                               title: "Promo code applied!",
                               description: "10% discount applied to your order.",
                             });
-                          } else if (code === 'ARTIST20') {
+                          } else if (code === 'STYLE20') {
                             setDiscount(subtotal * 0.2);
                             toast({
                               title: "Promo code applied!",
@@ -170,7 +166,7 @@ export function Cart() {
                     </div>
                     {discount === 0 && (
                       <p className="text-xs text-muted-foreground mt-2">
-                        Try codes: CRAFT10, ARTIST20
+                        Try codes: FASHION10, STYLE20
                       </p>
                     )}
                   </div>

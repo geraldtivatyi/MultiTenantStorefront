@@ -17,12 +17,23 @@ export function CartItemComponent({ item }: CartItemProps) {
   const handleUpdateQuantity = async (newQuantity: number) => {
     if (newQuantity < 1) return;
     
+    // Check stock before updating
+    if (item.product.stock !== null && newQuantity > item.product.stock) {
+      toast({
+        title: "Insufficient Stock",
+        description: `Only ${item.product.stock} item(s) available in stock.`,
+        variant: "destructive",
+      });
+      return;
+    }
+    
     try {
       await updateCart({ id: item.id, quantity: newQuantity });
-    } catch (error) {
+    } catch (error: any) {
+      const errorMessage = error?.message || "Failed to update cart item. Please try again.";
       toast({
-        title: "Error",
-        description: "Failed to update cart item.",
+        title: errorMessage.includes("stock") || errorMessage.includes("available") ? "Stock Issue" : "Error",
+        description: errorMessage,
         variant: "destructive",
       });
     }

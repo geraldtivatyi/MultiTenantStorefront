@@ -1,24 +1,23 @@
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { tenantMiddleware, adminBypass, type TenantRequest } from "./middleware/tenant";
 import { paystackService, type PaystackWebhookEvent } from "./services/paystack";
 import { whatsappService, type WhatsAppWebhookEvent } from "./services/whatsapp";
 import { emailService } from "./services/email";
 import { pudoService } from "./services/pudo";
+import { cloudinaryService } from "./services/cloudinary";
 import { 
   AuthService, 
   authMiddleware, 
   requireAuth, 
   requireAdmin, 
   requirePlatformAdmin,
-  requireTenantOwner,
   setSessionCookie, 
   clearSessionCookie,
   type AuthenticatedRequest 
 } from "./auth";
 import { 
-  insertTenantSchema, 
+  insertStoreSettingsSchema,
   insertProductSchema, 
   insertCartItemSchema,
   insertOrderSchema,
@@ -28,17 +27,27 @@ import {
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Health check endpoint (before auth middleware)
+  app.get('/api/health', async (req: Request, res: Response) => {
+    try {
+      // Simple database connectivity check
+      await storage.getStoreSettings(); // This will fail if DB is down
+      res.json({ 
+        status: 'healthy', 
+        timestamp: new Date().toISOString(),
+        service: 'e-commerce-api'
+      });
+    } catch (error) {
+      res.status(503).json({ 
+        status: 'unhealthy', 
+        timestamp: new Date().toISOString(),
+        error: 'Database connection failed'
+      });
+    }
+  });
+
   // Apply authentication middleware to all routes
   app.use(authMiddleware);
-  
-  // Apply tenant middleware to all API routes except admin and webhooks
-  app.use('/api/storefront', tenantMiddleware());
-  app.use('/api/cart', tenantMiddleware());
-  app.use('/api/orders', tenantMiddleware());
-  app.use('/api/pudo', tenantMiddleware());
-  
-  // Admin routes (no tenant middleware)
-  app.use('/api/admin', adminBypass());
 
   // Authentication routes
   const loginSchema = z.object({
@@ -80,6 +89,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Hash password
       const hashedPassword = await AuthService.hashPassword(data.password);
 
+      // Generate email verification token
+      const verificationToken = AuthService.generateVerificationToken();
+      const verificationTokenExpires = new Date();
+      verificationTokenExpires.setHours(verificationTokenExpires.getHours() + 24); // 24 hours
+
       // Create user
       const user = await storage.createUser({
         username: data.username,
@@ -88,11 +102,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         firstName: data.firstName,
         lastName: data.lastName,
         phone: data.phone,
-        tenantId: null, // Users can be global or assigned to specific tenants
+        role: "customer",
         isAdmin: false,
         emailVerified: false,
+        emailVerificationToken: verificationToken,
+        emailVerificationTokenExpires: verificationTokenExpires,
         isActive: true,
       });
+
+      // Send verification email
+      try {
+        const verificationUrl = `${req.protocol}://${req.get('host')}/verify-email?token=${verificationToken}`;
+        await emailService.sendEmailVerification({
+          email: data.email,
+          name: data.firstName || data.username,
+          verificationUrl,
+        });
+      } catch (emailError) {
+        console.error('Failed to send verification email:', emailError);
+        // Don't fail registration if email fails
+      }
 
       // Create session
       const sessionId = await AuthService.createSession(user.id);
@@ -102,7 +131,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { password, ...userWithoutPassword } = user;
       res.status(201).json({ 
         user: userWithoutPassword,
-        message: 'Registration successful'
+        message: 'Registration successful. Please check your email to verify your account.'
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -154,8 +183,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let redirectUrl = '/';
       if (user.role === 'platform_admin') {
         redirectUrl = '/admin';
-      } else if (user.role === 'tenant_owner') {
-        redirectUrl = '/vendor';
       }
 
       // Return user without password
@@ -209,6 +236,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Check authentication status
   app.get('/api/auth/status', async (req: AuthenticatedRequest, res) => {
+    console.log('Auth status check - User:', req.user ? { id: req.user.id, role: req.user.role } : 'null');
     res.json({ 
       authenticated: !!req.user,
       user: req.user ? { 
@@ -219,17 +247,183 @@ export async function registerRoutes(app: Express): Promise<Server> {
         lastName: req.user.lastName,
         phone: req.user.phone,
         role: req.user.role,
-        tenantId: req.user.tenantId,
-        isAdmin: req.user.isAdmin
+        isAdmin: req.user.isAdmin,
+        emailVerified: req.user.emailVerified
       } : null 
     });
+  });
+
+  // Verify email
+  app.get('/api/auth/verify-email', async (req: AuthenticatedRequest, res) => {
+    try {
+      const { token } = req.query;
+
+      if (!token || typeof token !== 'string') {
+        return res.status(400).json({ error: 'Verification token is required' });
+      }
+
+      const user = await storage.getUserByVerificationToken(token);
+      if (!user) {
+        return res.status(400).json({ error: 'Invalid or expired verification token' });
+      }
+
+      // Check if token is expired
+      if (user.emailVerificationTokenExpires && new Date(user.emailVerificationTokenExpires) < new Date()) {
+        return res.status(400).json({ error: 'Verification token has expired' });
+      }
+
+      // Verify email
+      await storage.updateUserProfile(user.id, {
+        emailVerified: true,
+        emailVerificationToken: null,
+        emailVerificationTokenExpires: null,
+      });
+
+      res.json({ 
+        success: true,
+        message: 'Email verified successfully'
+      });
+    } catch (error) {
+      console.error('Email verification error:', error);
+      res.status(500).json({ error: 'Failed to verify email' });
+    }
+  });
+
+  // Resend verification email
+  app.post('/api/auth/resend-verification', requireAuth, async (req: AuthenticatedRequest, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: 'Authentication required' });
+      }
+
+      if (req.user.emailVerified) {
+        return res.status(400).json({ error: 'Email is already verified' });
+      }
+
+      // Generate new verification token
+      const verificationToken = AuthService.generateVerificationToken();
+      const verificationTokenExpires = new Date();
+      verificationTokenExpires.setHours(verificationTokenExpires.getHours() + 24);
+
+      // Update user with new token
+      await storage.updateUserProfile(req.user.id, {
+        emailVerificationToken: verificationToken,
+        emailVerificationTokenExpires: verificationTokenExpires,
+      });
+
+      // Send verification email
+      const verificationUrl = `${req.protocol}://${req.get('host')}/verify-email?token=${verificationToken}`;
+      await emailService.sendEmailVerification({
+        email: req.user.email,
+        name: req.user.firstName || req.user.username,
+        verificationUrl,
+      });
+
+      res.json({ 
+        success: true,
+        message: 'Verification email sent successfully'
+      });
+    } catch (error) {
+      console.error('Resend verification error:', error);
+      res.status(500).json({ error: 'Failed to send verification email' });
+    }
+  });
+
+  // Request password reset
+  app.post('/api/auth/forgot-password', async (req: AuthenticatedRequest, res) => {
+    try {
+      const { email } = req.body;
+
+      if (!email) {
+        return res.status(400).json({ error: 'Email is required' });
+      }
+
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        // Don't reveal if user exists for security
+        return res.json({ 
+          success: true,
+          message: 'If an account exists with this email, a password reset link has been sent.'
+        });
+      }
+
+      // Generate password reset token
+      const resetToken = AuthService.generatePasswordResetToken();
+      const resetTokenExpires = new Date();
+      resetTokenExpires.setHours(resetTokenExpires.getHours() + 1); // 1 hour
+
+      // Update user with reset token
+      await storage.updateUserProfile(user.id, {
+        passwordResetToken: resetToken,
+        passwordResetTokenExpires: resetTokenExpires,
+      });
+
+      // Send password reset email
+      const resetUrl = `${req.protocol}://${req.get('host')}/reset-password?token=${resetToken}`;
+      await emailService.sendPasswordReset({
+        email: user.email,
+        name: user.firstName || user.username,
+        resetUrl,
+      });
+
+      res.json({ 
+        success: true,
+        message: 'If an account exists with this email, a password reset link has been sent.'
+      });
+    } catch (error) {
+      console.error('Forgot password error:', error);
+      res.status(500).json({ error: 'Failed to process password reset request' });
+    }
+  });
+
+  // Reset password
+  app.post('/api/auth/reset-password', async (req: AuthenticatedRequest, res) => {
+    try {
+      const { token, newPassword } = req.body;
+
+      if (!token || !newPassword) {
+        return res.status(400).json({ error: 'Token and new password are required' });
+      }
+
+      if (newPassword.length < 6) {
+        return res.status(400).json({ error: 'Password must be at least 6 characters' });
+      }
+
+      const user = await storage.getUserByPasswordResetToken(token);
+      if (!user) {
+        return res.status(400).json({ error: 'Invalid or expired reset token' });
+      }
+
+      // Check if token is expired
+      if (user.passwordResetTokenExpires && new Date(user.passwordResetTokenExpires) < new Date()) {
+        return res.status(400).json({ error: 'Reset token has expired' });
+      }
+
+      // Hash new password
+      const hashedPassword = await AuthService.hashPassword(newPassword);
+
+      // Update password and clear reset token
+      await storage.updateUserProfile(user.id, {
+        password: hashedPassword,
+        passwordResetToken: null,
+        passwordResetTokenExpires: null,
+      });
+
+      res.json({ 
+        success: true,
+        message: 'Password reset successfully'
+      });
+    } catch (error) {
+      console.error('Reset password error:', error);
+      res.status(500).json({ error: 'Failed to reset password' });
+    }
   });
 
   // Create demo user (for testing - remove in production)
   app.post('/api/auth/create-demo-user', async (req, res) => {
     try {
       // Check if demo user already exists
-      const existingUser = await storage.getUserByEmail('demo@creativecrafts.co.za');
+      const existingUser = await storage.getUserByEmail('demo@fashionstore.co.za');
       if (existingUser) {
         return res.json({ message: 'Demo user already exists' });
       }
@@ -238,12 +432,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const hashedPassword = await AuthService.hashPassword('demo123');
       const user = await storage.createUser({
         username: 'demo',
-        email: 'demo@creativecrafts.co.za',
+        email: 'demo@fashionstore.co.za',
         password: hashedPassword,
         firstName: 'Demo',
         lastName: 'User',
         phone: '+27 12 345 6789',
-        tenantId: null,
         isAdmin: false,
         emailVerified: true,
         isActive: true,
@@ -462,38 +655,88 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get tenant information
-  app.get('/api/storefront/tenant', async (req: TenantRequest, res) => {
+  // Get store settings
+  app.get('/api/storefront/settings', async (req: AuthenticatedRequest, res) => {
     try {
-      if (!req.tenant) {
-        return res.status(404).json({ error: 'Tenant not found' });
+      const settings = await storage.getStoreSettings();
+      
+      // Return default settings if none exist (instead of 404)
+      if (!settings) {
+        return res.json({
+          id: 0,
+          name: 'M Blessings',
+          heroTitle: 'Welcome to M Blessings',
+          heroSubtitle: 'Discover quality products and excellent service',
+          heroImageUrl: undefined,
+          deliveryOptions: ["collection", "pudo"], // Default to both options
+          pudoCollectionAddress: undefined,
+          pudoPreferredLocker: undefined,
+          aboutStory: undefined,
+          aboutValues: undefined,
+          aboutStats: undefined,
+          aboutImages: undefined,
+          contactEmail: undefined,
+          contactPhone: undefined,
+          contactAddress: undefined,
+          storeHours: undefined,
+          address: undefined,
+          whatsappPhone: undefined,
+        });
+      }
+
+      // Ensure deliveryOptions always includes both collection and pudo
+      let deliveryOptions = settings.deliveryOptions && settings.deliveryOptions.length > 0 
+        ? [...settings.deliveryOptions] 
+        : ["collection", "pudo"];
+      
+      // Always include "collection" and "pudo" if not already present
+      if (!deliveryOptions.includes("collection")) {
+        deliveryOptions.push("collection");
+      }
+      if (!deliveryOptions.includes("pudo")) {
+        deliveryOptions.push("pudo");
       }
 
       res.json({
-        id: req.tenant.id,
-        name: req.tenant.name,
-        subdomain: req.tenant.subdomain,
-        heroTitle: req.tenant.heroTitle || `Welcome to ${req.tenant.name}`,
-        heroSubtitle: req.tenant.heroSubtitle || 'Discover amazing products',
-        deliveryOptions: req.tenant.deliveryOptions || ["collection"],
-        pudoApiKey: req.tenant.pudoApiKey,
-        pudoCollectionAddress: req.tenant.pudoCollectionAddress,
-        pudoPreferredLocker: req.tenant.pudoPreferredLocker,
+        id: settings.id,
+        name: settings.name,
+        heroTitle: settings.heroTitle || `Welcome to ${settings.name}`,
+        heroSubtitle: settings.heroSubtitle || 'Discover quality products and excellent service',
+        heroImageUrl: settings.heroImageUrl,
+        deliveryOptions: deliveryOptions,
+        pudoCollectionAddress: settings.pudoCollectionAddress,
+        pudoPreferredLocker: settings.pudoPreferredLocker,
+        // About page content
+        aboutStory: settings.aboutStory,
+        aboutValues: settings.aboutValues,
+        aboutStats: settings.aboutStats,
+        aboutImages: settings.aboutImages,
+        // Contact page content
+        contactEmail: settings.contactEmail,
+        contactPhone: settings.contactPhone,
+        contactAddress: settings.contactAddress,
+        storeHours: settings.storeHours,
+        // Fallback fields
+        address: settings.address,
+        whatsappPhone: settings.whatsappPhone,
       });
     } catch (error) {
-      console.error('Get tenant error:', error);
-      res.status(500).json({ error: 'Failed to get tenant information' });
+      console.error('Get store settings error:', error);
+      // Return default settings even on error
+      res.json({
+        id: 0,
+        name: 'My Store',
+        heroTitle: 'Welcome to My Store',
+        heroSubtitle: 'Discover amazing products',
+        deliveryOptions: ["collection", "pudo"],
+      });
     }
   });
 
-  // Get products for a tenant
-  app.get('/api/storefront/products', async (req: TenantRequest, res) => {
+  // Get products
+  app.get('/api/storefront/products', async (req: AuthenticatedRequest, res) => {
     try {
-      if (!req.tenant) {
-        return res.status(404).json({ error: 'Tenant not found' });
-      }
-
-      const products = await storage.getProductsByTenant(req.tenant.id);
+      const products = await storage.getAllProducts();
       res.json(products);
     } catch (error) {
       console.error('Get products error:', error);
@@ -502,14 +745,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get single product
-  app.get('/api/storefront/products/:id', async (req: TenantRequest, res) => {
+  app.get('/api/storefront/products/:id', async (req: AuthenticatedRequest, res) => {
     try {
-      if (!req.tenant) {
-        return res.status(404).json({ error: 'Tenant not found' });
-      }
-
       const productId = parseInt(req.params.id);
-      const product = await storage.getProduct(productId, req.tenant.id);
+      const product = await storage.getProduct(productId);
       
       if (!product) {
         return res.status(404).json({ error: 'Product not found' });
@@ -523,14 +762,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Cart routes
-  app.get('/api/cart', async (req: TenantRequest, res) => {
+  app.get('/api/cart', async (req: AuthenticatedRequest, res) => {
     try {
-      if (!req.tenant) {
-        return res.status(404).json({ error: 'Tenant not found' });
-      }
-
       const sessionId = req.headers['x-session-id'] as string || 'anonymous';
-      const cartItems = await storage.getCartItems(sessionId, req.tenant.id);
+      const cartItems = await storage.getCartItems(sessionId);
       res.json(cartItems);
     } catch (error) {
       console.error('Get cart error:', error);
@@ -538,22 +773,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/cart', async (req: TenantRequest, res) => {
+  app.post('/api/cart', async (req: AuthenticatedRequest, res) => {
     try {
-      if (!req.tenant) {
-        return res.status(404).json({ error: 'Tenant not found' });
-      }
-
       const sessionId = req.headers['x-session-id'] as string || 'anonymous';
       const cartItemData = insertCartItemSchema.parse({
         ...req.body,
         sessionId,
       });
 
-      // Verify product belongs to tenant
-      const product = await storage.getProduct(cartItemData.productId, req.tenant.id);
+      // Verify product exists
+      const product = await storage.getProduct(cartItemData.productId);
       if (!product) {
         return res.status(404).json({ error: 'Product not found' });
+      }
+
+      // Check if product is active
+      if (!product.isActive) {
+        return res.status(400).json({ error: 'This product is currently unavailable' });
+      }
+
+      // Check stock availability
+      if (product.stock !== null && product.stock < cartItemData.quantity) {
+        return res.status(400).json({ 
+          error: `Only ${product.stock} item(s) available in stock`,
+          availableStock: product.stock
+        });
+      }
+
+      // Check if item already exists in cart and validate total quantity
+      const existingCartItems = await storage.getCartItems(sessionId);
+      const existingItem = existingCartItems.find(item => item.productId === cartItemData.productId);
+      const currentQuantity = existingItem ? existingItem.quantity : 0;
+      const newTotalQuantity = currentQuantity + cartItemData.quantity;
+
+      if (product.stock !== null && product.stock < newTotalQuantity) {
+        return res.status(400).json({ 
+          error: `Only ${product.stock} item(s) available. You already have ${currentQuantity} in your cart.`,
+          availableStock: product.stock,
+          currentInCart: currentQuantity
+        });
       }
 
       const cartItem = await storage.addToCart(cartItemData);
@@ -567,13 +825,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/cart/:id', async (req: TenantRequest, res) => {
+  app.put('/api/cart/:id', async (req: AuthenticatedRequest, res) => {
     try {
       const itemId = parseInt(req.params.id);
       const { quantity } = req.body;
 
       if (!quantity || quantity < 1) {
         return res.status(400).json({ error: 'Invalid quantity' });
+      }
+
+      // Get the cart item to check product stock
+      const sessionId = req.headers['x-session-id'] as string || 'anonymous';
+      const cartItems = await storage.getCartItems(sessionId);
+      const cartItem = cartItems.find(item => item.id === itemId);
+      
+      if (!cartItem) {
+        return res.status(404).json({ error: 'Cart item not found' });
+      }
+
+      // Check product stock
+      const product = cartItem.product;
+      if (!product.isActive) {
+        return res.status(400).json({ error: 'This product is currently unavailable' });
+      }
+
+      if (product.stock !== null && product.stock < quantity) {
+        return res.status(400).json({ 
+          error: `Only ${product.stock} item(s) available in stock`,
+          availableStock: product.stock
+        });
       }
 
       const updatedItem = await storage.updateCartItem(itemId, quantity);
@@ -588,7 +868,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/cart/:id', async (req: TenantRequest, res) => {
+  app.delete('/api/cart/:id', async (req: AuthenticatedRequest, res) => {
     try {
       const itemId = parseInt(req.params.id);
       await storage.removeFromCart(itemId);
@@ -603,45 +883,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const checkoutSchema = z.object({
     customerEmail: z.string().email(),
     customerName: z.string().min(1),
+    customerPhone: z.string().optional(), // Customer phone number for notifications
     shippingAddress: z.string().min(1),
     city: z.string().min(1),
     postalCode: z.string().min(1),
-    deliveryMethod: z.enum(["collection", "standard_delivery", "pudo"]),
+    deliveryMethod: z.enum(["collection", "pudo"]),
     pudoLocker: z.string().optional(),
     shippingCost: z.number().default(0),
     totalAmount: z.number().optional(),
   });
 
-  app.post('/api/orders/checkout', async (req: TenantRequest, res) => {
+  app.post('/api/orders/checkout', async (req: AuthenticatedRequest, res) => {
     try {
-      if (!req.tenant) {
-        return res.status(404).json({ error: 'Tenant not found' });
-      }
-
       const sessionId = req.headers['x-session-id'] as string || 'anonymous';
       const checkoutData = checkoutSchema.parse(req.body);
       const userId = req.user?.id; // Optional - will be null for guest users
 
       // Get cart items
-      const cartItems = await storage.getCartItems(sessionId, req.tenant.id);
+      const cartItems = await storage.getCartItems(sessionId);
       if (cartItems.length === 0) {
         return res.status(400).json({ error: 'Cart is empty' });
+      }
+
+      // Validate stock availability for all items before checkout
+      for (const cartItem of cartItems) {
+        const product = await storage.getProduct(cartItem.productId);
+        if (!product) {
+          return res.status(400).json({ error: `Product "${cartItem.product.name}" no longer exists` });
+        }
+        if (!product.isActive) {
+          return res.status(400).json({ error: `Product "${product.name}" is currently unavailable` });
+        }
+        if (product.stock !== null && product.stock < cartItem.quantity) {
+          return res.status(400).json({ 
+            error: `Insufficient stock for "${product.name}". Only ${product.stock} item(s) available.`,
+            productName: product.name,
+            availableStock: product.stock,
+            requestedQuantity: cartItem.quantity
+          });
+        }
       }
 
       // Calculate totals
       const subtotal = cartItems.reduce((sum, item) => 
         sum + (parseFloat(item.product.price) * item.quantity), 0
       );
-      const tax = subtotal * 0.08; // 8% tax
+      const tax = 0; // No tax - client does not have VAT yet
       const shippingCost = checkoutData.shippingCost || 0;
-      const total = subtotal + tax + shippingCost;
+      const total = subtotal + shippingCost; // Total = subtotal + shipping (no tax)
 
       // Create order with delivery information
       const orderData = insertOrderSchema.parse({
-        tenantId: req.tenant.id,
         userId: userId || undefined, // Link to authenticated user if available
         customerEmail: checkoutData.customerEmail,
         customerName: checkoutData.customerName,
+        customerPhone: checkoutData.customerPhone || undefined,
         shippingAddress: checkoutData.shippingAddress,
         city: checkoutData.city,
         postalCode: checkoutData.postalCode,
@@ -674,7 +970,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         reference: paystackService.generateReference('ORD'),
         metadata: {
           orderId: order.id,
-          tenantId: req.tenant.id,
+          sessionId: sessionId, // Store sessionId to clear cart after successful payment
         },
       });
 
@@ -683,8 +979,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Update order with Paystack reference
       await storage.updateOrderStatus(order.id, 'pending');
 
-      // Clear cart
-      await storage.clearCart(sessionId);
+      // Don't clear cart here - wait for payment confirmation
+      // Cart will be cleared in the webhook when payment succeeds
 
       res.json({
         order,
@@ -718,32 +1014,114 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (event.event === 'charge.success') {
         const { reference, status } = event.data;
         
-        // Find order by metadata
-        const orderId = event.data.metadata?.orderId;
-        if (orderId) {
-          await storage.updateOrderStatus(orderId, 'paid');
+          // Find order by metadata
+          const orderId = event.data.metadata?.orderId;
+          const sessionId = event.data.metadata?.sessionId;
           
-          // Create payment transaction record
-          await storage.createPaymentTransaction({
-            orderId,
-            paystackReference: reference,
-            amount: (event.data.amount / 100).toFixed(2), // Convert from kobo
-            status: status,
-            metadata: JSON.stringify(event.data),
-          });
+          if (orderId) {
+            await storage.updateOrderStatus(orderId, 'paid');
+            
+            // Create payment transaction record
+            await storage.createPaymentTransaction({
+              orderId,
+              paystackReference: reference,
+              amount: (event.data.amount / 100).toFixed(2), // Convert from kobo
+              status: status,
+              metadata: JSON.stringify(event.data),
+            });
 
-          // Send notifications to vendor and customer
-          try {
-            const order = await storage.getOrder(orderId);
-            if (order) {
-              const tenant = await storage.getTenant(order.tenantId);
+            // Clear cart only after successful payment
+            if (sessionId) {
+              try {
+                await storage.clearCart(sessionId);
+                console.log(`Cart cleared for session ${sessionId} after successful payment for order ${orderId}`);
+              } catch (cartError) {
+                console.error(`Failed to clear cart for session ${sessionId}:`, cartError);
+                // Don't fail the payment processing if cart clearing fails
+              }
+            }
+
+            // Create Pudo shipment if delivery method is Pudo
+            try {
+              const order = await storage.getOrder(orderId);
+              if (order && order.deliveryMethod === 'pudo' && order.pudoLocker) {
+                const storeSettings = await storage.getStoreSettings();
+                const orderItems = await storage.getOrderItems(orderId);
+                
+                if (storeSettings?.pudoCollectionAddress && orderItems.length > 0) {
+                  // Calculate combined dimensions and weight
+                  let totalWeight = 0;
+                  let maxLength = 0;
+                  let maxWidth = 0;
+                  let totalHeight = 0;
+
+                  for (const item of orderItems) {
+                    const product = await storage.getProduct(item.productId);
+                    if (product?.pudoDimensions && product.pudoWeight) {
+                      const dimensions = product.pudoDimensions as any;
+                      const weight = parseFloat(product.pudoWeight.toString());
+                      
+                      totalWeight += weight * item.quantity;
+                      maxLength = Math.max(maxLength, dimensions.length || 0);
+                      maxWidth = Math.max(maxWidth, dimensions.width || 0);
+                      totalHeight += (dimensions.height || 0) * item.quantity;
+                    }
+                  }
+
+                  // Create Pudo shipment
+                  const shipment = await pudoService.createShipment(
+                    storeSettings.pudoCollectionAddress as any,
+                    {
+                      name: storeSettings.name || 'Store',
+                      email: storeSettings.contactEmail || storeSettings.ownerEmail || '',
+                      phone: storeSettings.contactPhone || storeSettings.ownerPhone || ''
+                    },
+                    order.pudoLocker,
+                    {
+                      name: order.customerName,
+                      email: order.customerEmail,
+                      phone: order.customerPhone || '' // Use customer phone from order
+                    },
+                    {
+                      length: maxLength,
+                      width: maxWidth,
+                      height: totalHeight
+                    },
+                    totalWeight,
+                    `Order #${order.orderNumber}`,
+                    order.orderNumber
+                  );
+
+                  // Update order with Courier Guy shipment details
+                  // Handle different possible response formats
+                  const shipmentId = shipment.id || shipment.shipment_id;
+                  const trackingRef = shipment.short_tracking_reference || shipment.tracking_reference;
+                  
+                  await storage.updateOrder(orderId, {
+                    pudoShipmentId: shipmentId ? parseInt(shipmentId.toString()) : undefined,
+                    pudoTrackingReference: trackingRef || undefined
+                  });
+
+                  console.log(`Courier Guy shipment created for order ${orderId}: ${trackingRef || 'N/A'}`);
+                }
+              }
+            } catch (pudoError) {
+              console.error('Error creating Courier Guy shipment:', pudoError);
+              // Don't fail the payment processing if shipment creation fails
+            }
+
+            // Send notifications to store admin and customer
+            try {
+              const order = await storage.getOrder(orderId);
+              if (order) {
+              const storeSettings = await storage.getStoreSettings();
               const orderItems = await storage.getOrderItems(orderId);
               
-              if (tenant && orderItems.length > 0) {
+              if (storeSettings && orderItems.length > 0) {
                 // Prepare notification data
                 const notificationData = {
                   orderId: order.id,
-                  storeName: tenant.name,
+                  storeName: storeSettings.name,
                   customerName: order.customerName,
                   customerEmail: order.customerEmail,
                   totalAmount: parseFloat(order.total),
@@ -756,11 +1134,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   })),
                 };
 
-                // Send WhatsApp notification to vendor
-                if (tenant.whatsappPhone) {
+                // Send WhatsApp notification if configured
+                if (storeSettings.whatsappPhone) {
                   try {
                     await whatsappService.sendOrderNotification(
-                      tenant.whatsappPhone,
+                      storeSettings.whatsappPhone,
                       {
                         orderId: notificationData.orderId,
                         storeName: notificationData.storeName,
@@ -770,28 +1148,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
                         itemCount: notificationData.itemCount,
                       }
                     );
-                    console.log(`WhatsApp notification sent to vendor for order ${orderId}`);
+                    console.log(`WhatsApp notification sent for order ${orderId}`);
                   } catch (whatsappError) {
                     console.error('Failed to send WhatsApp notification:', whatsappError);
                   }
                 }
 
-                // Send email notification to vendor
-                try {
-                  await emailService.sendOrderNotificationToVendor({
-                    vendorEmail: tenant.ownerEmail,
-                    storeName: notificationData.storeName,
-                    orderId: notificationData.orderId,
-                    customerName: notificationData.customerName,
-                    customerEmail: notificationData.customerEmail,
-                    totalAmount: notificationData.totalAmount,
-                    currency: notificationData.currency,
-                    itemCount: notificationData.itemCount,
-                    items: notificationData.items,
-                  });
-                  console.log(`Email notification sent to vendor for order ${orderId}`);
-                } catch (emailError) {
-                  console.error('Failed to send email notification to vendor:', emailError);
+                // Send email notification to store admin
+                if (storeSettings.contactEmail) {
+                  try {
+                    await emailService.sendOrderNotificationToVendor({
+                      vendorEmail: storeSettings.contactEmail,
+                      storeName: notificationData.storeName,
+                      orderId: notificationData.orderId,
+                      customerName: notificationData.customerName,
+                      customerEmail: notificationData.customerEmail,
+                      totalAmount: notificationData.totalAmount,
+                      currency: notificationData.currency,
+                      itemCount: notificationData.itemCount,
+                      items: notificationData.items,
+                    });
+                    console.log(`Email notification sent for order ${orderId}`);
+                  } catch (emailError) {
+                    console.error('Failed to send email notification:', emailError);
+                  }
                 }
 
                 // Send email confirmation to customer
@@ -904,258 +1284,234 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Admin tenant management endpoints
-  app.get('/api/admin/tenants', requireAuth, requirePlatformAdmin, async (req: AuthenticatedRequest, res) => {
+  // Dashboard stats endpoint
+  app.get('/api/admin/stats', requireAuth, requirePlatformAdmin, async (req: AuthenticatedRequest, res) => {
     try {
-      const tenants = await storage.getAllTenants();
-      res.json(tenants);
-    } catch (error) {
-      console.error('Error fetching tenants:', error);
-      res.status(500).json({ error: 'Failed to fetch tenants' });
-    }
-  });
-
-  app.post('/api/admin/tenants', requireAuth, requirePlatformAdmin, async (req: AuthenticatedRequest, res) => {
-    try {
-      const tenantData = req.body;
+      // Get all products
+      const products = await storage.getAllProducts();
       
-      // Validate required fields
-      if (!tenantData.name || !tenantData.subdomain || !tenantData.ownerName || !tenantData.ownerEmail) {
-        return res.status(400).json({ error: 'Missing required fields' });
-      }
-
-      // Check if subdomain already exists
-      const existingTenant = await storage.getTenantBySubdomain(tenantData.subdomain);
-      if (existingTenant) {
-        return res.status(400).json({ error: 'Subdomain already exists' });
-      }
-
-      // Create user account for tenant owner
-      let ownerId = null;
-      try {
-        const existingUser = await storage.getUserByEmail(tenantData.ownerEmail);
-        if (existingUser) {
-          ownerId = existingUser.id;
-        } else {
-          // Create new user account
-          const newUser = await storage.createUser({
-            username: tenantData.ownerEmail,
-            email: tenantData.ownerEmail,
-            password: await AuthService.hashPassword('temp123'), // Temporary password
-            firstName: tenantData.ownerName.split(' ')[0] || tenantData.ownerName,
-            lastName: tenantData.ownerName.split(' ').slice(1).join(' ') || '',
-            role: 'tenant_owner',
-          });
-          ownerId = newUser.id;
+      // Get all orders
+      const allOrders = await storage.getAllOrders();
+      
+      // Calculate revenue from paid orders
+      const paidOrders = allOrders.filter(order => order.status === 'paid');
+      const totalRevenue = paidOrders.reduce((sum, order) => {
+        return sum + parseFloat(order.total);
+      }, 0);
+      
+      // Get all users
+      const allUsers = await storage.getAllUsers();
+      
+      // Calculate active users (users who have logged in recently or have orders)
+      const activeUsers = allUsers.filter(u => {
+        // Consider users active if they have orders or logged in within last 90 days
+        const hasOrders = allOrders.some(o => o.userId === u.id);
+        if (hasOrders) return true;
+        if (u.lastLoginAt) {
+          const lastLogin = new Date(u.lastLoginAt);
+          const daysSinceLogin = (Date.now() - lastLogin.getTime()) / (1000 * 60 * 60 * 24);
+          return daysSinceLogin <= 90;
         }
-      } catch (error) {
-        console.error('Error creating/finding user:', error);
-        return res.status(500).json({ error: 'Failed to create user account' });
-      }
-
-      // Create tenant
-      const tenant = await storage.createTenant({
-        name: tenantData.name,
-        subdomain: tenantData.subdomain,
-        ownerId,
-        ownerName: tenantData.ownerName,
-        ownerEmail: tenantData.ownerEmail,
-        ownerPhone: tenantData.ownerPhone || null,
-        description: tenantData.description || null,
-        address: tenantData.address || null,
-        businessType: tenantData.businessType || 'other',
+        return false;
       });
-
-      res.json(tenant);
+      
+      const stats = {
+        totalProducts: products.length,
+        totalRevenue: `R ${totalRevenue.toFixed(2)}`,
+        totalOrders: allOrders.length,
+        activeUsers: activeUsers.length,
+        totalCustomers: allUsers.filter(u => u.role === 'customer').length,
+      };
+      
+      res.json(stats);
     } catch (error) {
-      console.error('Error creating tenant:', error);
-      res.status(500).json({ error: 'Failed to create tenant' });
+      console.error('Get dashboard stats error:', error);
+      res.status(500).json({ error: 'Failed to get dashboard statistics' });
     }
   });
 
-  app.put('/api/admin/tenants/:id', requireAuth, requirePlatformAdmin, async (req: AuthenticatedRequest, res) => {
+  // Store settings management endpoints
+  app.get('/api/admin/store-settings', requireAuth, requirePlatformAdmin, async (req: AuthenticatedRequest, res) => {
     try {
-      const tenantId = parseInt(req.params.id);
-      const updateData = req.body;
-
-      const tenant = await storage.updateTenant(tenantId, updateData);
-      if (!tenant) {
-        return res.status(404).json({ error: 'Tenant not found' });
+      const settings = await storage.getStoreSettings();
+      if (!settings) {
+        return res.status(404).json({ error: 'Store settings not found' });
       }
-
-      res.json(tenant);
+      res.json(settings);
     } catch (error) {
-      console.error('Error updating tenant:', error);
-      res.status(500).json({ error: 'Failed to update tenant' });
+      console.error('Error fetching store settings:', error);
+      res.status(500).json({ error: 'Failed to fetch store settings' });
     }
   });
 
-  // Update tenant WhatsApp settings
-  app.put('/api/tenant/whatsapp', requireAuth, requireTenantOwner, async (req: AuthenticatedRequest, res) => {
+  app.put('/api/admin/store-settings', requireAuth, requirePlatformAdmin, async (req: AuthenticatedRequest, res) => {
     try {
-      const { whatsappPhone } = req.body;
-      const userId = req.user!.id;
+      const updateData = insertStoreSettingsSchema.partial().parse(req.body);
+      let settings = await storage.getStoreSettings();
       
-      // Get user's tenant
-      const user = await storage.getUser(userId);
-      if (!user || !user.tenantId) {
-        return res.status(400).json({ error: 'User not associated with a tenant' });
+      if (!settings) {
+        // Create if doesn't exist
+        settings = await storage.createStoreSettings({
+          name: updateData.name || 'M Blessings',
+          ...updateData,
+        });
+      } else {
+        // Update existing
+        settings = await storage.updateStoreSettings(updateData);
+      }
+      
+      if (!settings) {
+        return res.status(500).json({ error: 'Failed to update store settings' });
       }
 
-      // Update tenant's WhatsApp phone
-      await storage.updateTenant(user.tenantId, { whatsappPhone });
-      
-      res.json({ success: true, message: 'WhatsApp settings updated' });
+      res.json(settings);
     } catch (error) {
-      console.error('Update WhatsApp settings error:', error);
-      res.status(500).json({ error: 'Failed to update WhatsApp settings' });
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid store settings data', details: error.errors });
+      }
+      console.error('Error updating store settings:', error);
+      res.status(500).json({ error: 'Failed to update store settings' });
     }
   });
 
-  // Update tenant delivery options and Pudo settings
-  app.put('/api/tenant/delivery', requireAuth, requireTenantOwner, async (req: AuthenticatedRequest, res) => {
+
+  // Get Courier Guy lockers (public endpoint for checkout)
+  // Supports query parameters: lat, lng, order_closest, search, bounding box
+  app.get('/api/pudo/lockers', async (req: Request, res: Response) => {
     try {
-      const { deliveryOptions, pudoCollectionAddress, pudoPreferredLocker } = req.body;
-      const userId = req.user!.id;
+      const filters: any = {};
       
-      // Get user's tenant
-      const user = await storage.getUser(userId);
-      if (!user || !user.tenantId) {
-        return res.status(400).json({ error: 'User not associated with a tenant' });
-      }
-
-      // Validate Pudo API if pudo delivery is enabled
-      if (deliveryOptions?.includes('pudo')) {
-        const isValid = await pudoService.validatePudoCredentials();
-        if (!isValid) {
-          return res.status(400).json({ error: 'Pudo API not configured properly' });
-        }
-      }
-
-      const updateData: any = { deliveryOptions };
-      if (pudoCollectionAddress !== undefined) updateData.pudoCollectionAddress = pudoCollectionAddress;
-      if (pudoPreferredLocker !== undefined) updateData.pudoPreferredLocker = pudoPreferredLocker;
-
-      const tenant = await storage.updateTenant(user.tenantId, updateData);
-      if (!tenant) {
-        return res.status(404).json({ error: 'Tenant not found' });
-      }
-
-      res.json({ success: true, tenant });
-    } catch (error) {
-      console.error('Error updating delivery settings:', error);
-      res.status(500).json({ error: 'Failed to update delivery settings' });
-    }
-  });
-
-  // Get Pudo lockers
-  app.get('/api/pudo/lockers', requireAuth, async (req: AuthenticatedRequest, res) => {
-    try {
-      const userId = req.user!.id;
-      const user = await storage.getUser(userId);
+      // Parse query parameters
+      if (req.query.lat) filters.lat = parseFloat(req.query.lat as string);
+      if (req.query.lng) filters.lng = parseFloat(req.query.lng as string);
+      if (req.query.order_closest === 'true') filters.order_closest = true;
+      if (req.query.search) filters.search = req.query.search as string;
+      if (req.query.min_lat) filters.min_lat = parseFloat(req.query.min_lat as string);
+      if (req.query.max_lat) filters.max_lat = parseFloat(req.query.max_lat as string);
+      if (req.query.min_lng) filters.min_lng = parseFloat(req.query.min_lng as string);
+      if (req.query.max_lng) filters.max_lng = parseFloat(req.query.max_lng as string);
       
-      if (!user || !user.tenantId) {
-        return res.status(400).json({ error: 'User not associated with a tenant' });
-      }
-
-      const lockers = await pudoService.getLockers();
+      const lockers = await pudoService.getLockers(Object.keys(filters).length > 0 ? filters : undefined);
       res.json(lockers);
     } catch (error) {
-      console.error('Error fetching Pudo lockers:', error);
-      res.status(500).json({ error: 'Failed to fetch Pudo lockers' });
+      console.error('Unexpected error fetching Courier Guy lockers:', error);
+      // getLockers should always return sample data on error, but just in case:
+      res.status(500).json({ error: 'Failed to fetch lockers' });
     }
   });
 
-  // Get Pudo rates
-  app.get('/api/pudo/rates', requireAuth, async (req: AuthenticatedRequest, res) => {
-    try {
-      const userId = req.user!.id;
-      const user = await storage.getUser(userId);
-      
-      if (!user || !user.tenantId) {
-        return res.status(400).json({ error: 'User not associated with a tenant' });
-      }
-
-      const rates = await pudoService.getLockerRates();
-      res.json(rates);
-    } catch (error) {
-      console.error('Error fetching Pudo rates:', error);
-      res.status(500).json({ error: 'Failed to fetch Pudo rates' });
-    }
-  });
-
-  // Calculate Pudo shipping for products in cart
-  app.post('/api/pudo/calculate-shipping', async (req: TenantRequest, res) => {
+  // Calculate Courier Guy shipping for products in cart (public endpoint for checkout)
+  app.post('/api/pudo/calculate-shipping', async (req: Request, res: Response) => {
     try {
       const { items, deliveryLocker } = req.body; // items with product IDs and quantities
       
-      if (!req.tenant) {
-        return res.status(400).json({ error: 'Tenant not found' });
+      const storeSettings = await storage.getStoreSettings();
+      if (!storeSettings) {
+        return res.status(400).json({ error: 'Store settings not found' });
       }
 
-      if (!req.tenant.pudoCollectionAddress) {
-        return res.status(400).json({ error: 'Collection address not configured for Pudo delivery' });
+      if (!storeSettings.pudoCollectionAddress) {
+        return res.status(400).json({ error: 'Collection address not configured for Courier Guy delivery' });
       }
 
       if (!deliveryLocker) {
         return res.status(400).json({ error: 'Delivery locker location required' });
       }
 
-      let totalRate = 0;
-      const shippingDetails = [];
+      // Calculate combined dimensions and weight for all items
+      let totalWeight = 0;
+      let maxLength = 0;
+      let maxWidth = 0;
+      let totalHeight = 0;
 
       for (const item of items) {
-        const product = await storage.getProduct(item.productId, req.tenant.id);
+        const product = await storage.getProduct(item.productId);
         if (!product || !product.pudoDimensions || !product.pudoWeight) {
           return res.status(400).json({ 
-            error: `Product "${product?.name || 'Unknown'}" is not configured for Pudo delivery` 
+            error: `Product "${product?.name || 'Unknown'}" is not configured for Courier Guy delivery` 
           });
         }
 
         const dimensions = product.pudoDimensions as any;
         const weight = parseFloat(product.pudoWeight.toString());
-
-        const shipping = await pudoService.calculateShippingRate(
-          req.tenant.pudoCollectionAddress as any,
-          deliveryLocker,
-          dimensions,
-          weight * item.quantity
-        );
-
-        totalRate += shipping.rate * item.quantity;
-        shippingDetails.push({
-          productId: item.productId,
-          productName: product.name,
-          quantity: item.quantity,
-          individualRate: shipping.rate,
-          totalRate: shipping.rate * item.quantity,
-          deliveryTime: shipping.delivery_time
-        });
+        
+        totalWeight += weight * item.quantity;
+        maxLength = Math.max(maxLength, dimensions.length || 0);
+        maxWidth = Math.max(maxWidth, dimensions.width || 0);
+        totalHeight += (dimensions.height || 0) * item.quantity;
       }
 
+      // Calculate shipping rate using combined package dimensions
+      // Note: collectionAddress is still needed for the service method signature,
+      // but the new API uses pickup point IDs internally
+      const shipping = await pudoService.calculateShippingRate(
+        storeSettings.pudoCollectionAddress as any,
+        deliveryLocker,
+        {
+          length: maxLength,
+          width: maxWidth,
+          height: totalHeight
+        },
+        totalWeight
+      );
+
       res.json({
-        totalRate: parseFloat(totalRate.toFixed(2)),
-        currency: 'ZAR',
-        deliveryTime: '2-3 business days',
-        details: shippingDetails
+        totalRate: shipping.rate,
+        currency: shipping.currency,
+        deliveryTime: shipping.delivery_time,
+        baseRate: shipping.base_rate
       });
     } catch (error) {
-      console.error('Error calculating Pudo shipping:', error);
+      console.error('Error calculating Courier Guy shipping:', error);
       res.status(500).json({ error: 'Failed to calculate shipping' });
     }
   });
 
-  // Get user orders
-  app.get('/api/orders/my-orders', requireAuth, async (req: TenantRequest, res) => {
+  // Track a Courier Guy shipment (public endpoint)
+  app.get('/api/pudo/track/:trackingReference', async (req: Request, res: Response) => {
     try {
-      if (!req.tenant) {
-        return res.status(400).json({ error: 'Tenant not found' });
-      }
-      
+      const { trackingReference } = req.params;
+      const tracking = await pudoService.trackShipment(trackingReference);
+      res.json(tracking);
+    } catch (error) {
+      console.error('Error tracking Courier Guy shipment:', error);
+      res.status(500).json({ error: 'Failed to track shipment' });
+    }
+  });
+
+  // Get shipment label PDF (admin only)
+  app.get('/api/pudo/shipments/:shipmentId/label', requireAuth, requirePlatformAdmin, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const shipmentId = parseInt(req.params.shipmentId);
+      const labelBuffer = await pudoService.getShipmentLabel(shipmentId);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="shipment-${shipmentId}-label.pdf"`);
+      res.send(labelBuffer);
+    } catch (error) {
+      console.error('Error getting shipment label:', error);
+      res.status(500).json({ error: 'Failed to get shipment label' });
+    }
+  });
+
+  // Cancel a Pudo shipment (admin only)
+  app.put('/api/pudo/shipments/:shipmentId/cancel', requireAuth, requirePlatformAdmin, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const shipmentId = parseInt(req.params.shipmentId);
+      const result = await pudoService.cancelShipment(shipmentId);
+      res.json(result);
+    } catch (error) {
+      console.error('Error cancelling Pudo shipment:', error);
+      res.status(500).json({ error: 'Failed to cancel shipment' });
+    }
+  });
+
+  // Get user orders
+  app.get('/api/orders/my-orders', requireAuth, async (req: AuthenticatedRequest, res) => {
+    try {
       const userId = req.user!.id;
       
       // Get orders for the authenticated user only
-      const orders = await storage.getOrdersByUser(userId, req.tenant.id);
+      const orders = await storage.getOrdersByUser(userId);
       res.json(orders);
     } catch (error) {
       console.error('Get orders error:', error);
@@ -1164,7 +1520,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get order items for a specific order
-  app.get('/api/orders/:orderId/items', requireAuth, async (req: TenantRequest, res) => {
+  app.get('/api/orders/:orderId/items', requireAuth, async (req: AuthenticatedRequest, res) => {
     try {
       const orderId = parseInt(req.params.orderId);
       if (!orderId) {
@@ -1180,15 +1536,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Reorder - add all items from an order back to cart
-  app.post('/api/orders/:orderId/reorder', requireAuth, async (req: TenantRequest, res) => {
+  app.post('/api/orders/:orderId/reorder', requireAuth, async (req: AuthenticatedRequest, res) => {
     try {
       const orderId = parseInt(req.params.orderId);
       if (!orderId) {
         return res.status(400).json({ error: 'Invalid order ID' });
-      }
-
-      if (!req.tenant) {
-        return res.status(400).json({ error: 'Tenant not found' });
       }
 
       const sessionId = req.sessionID || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -1227,21 +1579,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Complete payment for pending order
-  app.post('/api/orders/:orderId/complete-payment', requireAuth, async (req: TenantRequest, res) => {
+  app.post('/api/orders/:orderId/complete-payment', requireAuth, async (req: AuthenticatedRequest, res) => {
     try {
       const orderId = parseInt(req.params.orderId);
       if (!orderId) {
         return res.status(400).json({ error: 'Invalid order ID' });
       }
 
-      if (!req.tenant) {
-        return res.status(400).json({ error: 'Tenant not found' });
-      }
-
       // Get the order
       const order = await storage.getOrder(orderId);
       if (!order) {
         return res.status(404).json({ error: 'Order not found' });
+      }
+
+      // Verify user has access to this order
+      if (req.user && req.user.role !== 'platform_admin' && order.userId !== req.user.id) {
+        return res.status(403).json({ error: 'Access denied' });
       }
 
       if (order.status !== 'pending') {
@@ -1287,7 +1640,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Cancel order
-  app.post('/api/orders/:orderId/cancel', requireAuth, async (req: TenantRequest, res) => {
+  app.post('/api/orders/:orderId/cancel', requireAuth, async (req: AuthenticatedRequest, res) => {
     try {
       const orderId = parseInt(req.params.orderId);
       if (!orderId) {
@@ -1300,14 +1653,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: 'Order not found' });
       }
 
-      // Verify user has access to this order (check if order belongs to current tenant)
-      if (!req.tenant || order.tenantId !== req.tenant.id) {
+      // Verify user has access to this order (must be the order owner or admin)
+      if (req.user && req.user.role !== 'platform_admin' && order.userId !== req.user.id) {
         return res.status(403).json({ error: 'Access denied' });
       }
 
       // Check if order can be cancelled (only pending orders can be cancelled)
       if (order.status !== 'pending') {
         return res.status(400).json({ error: 'Only pending orders can be cancelled' });
+      }
+
+      // Restore stock for all items in the order
+      try {
+        const orderItems = await storage.getOrderItems(orderId);
+        for (const item of orderItems) {
+          const product = await storage.getProduct(item.productId);
+          if (product) {
+            const currentStock = product.stock || 0;
+            const newStock = currentStock + item.quantity;
+            await storage.updateProduct(item.productId, { stock: newStock });
+          }
+        }
+      } catch (stockError) {
+        console.error('Error restoring stock:', stockError);
+        // Continue with cancellation even if stock restoration fails
       }
 
       // Update order status to cancelled
@@ -1323,109 +1692,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Admin routes
-  app.get('/api/admin/tenants', async (req, res) => {
+  // Get all products across all tenants (admin)
+  app.get('/api/admin/products', requireAuth, requirePlatformAdmin, async (req: AuthenticatedRequest, res) => {
     try {
-      const tenants = await storage.getAllTenants();
-      res.json(tenants);
-    } catch (error) {
-      console.error('Get tenants error:', error);
-      res.status(500).json({ error: 'Failed to get tenants' });
-    }
-  });
-
-  app.post('/api/admin/tenants', async (req, res) => {
-    try {
-      const tenantData = insertTenantSchema.parse(req.body);
-      const tenant = await storage.createTenant(tenantData);
-      res.status(201).json(tenant);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: 'Invalid tenant data', details: error.errors });
-      }
-      console.error('Create tenant error:', error);
-      res.status(500).json({ error: 'Failed to create tenant' });
-    }
-  });
-
-  app.post('/api/admin/products', async (req, res) => {
-    try {
-      const productData = insertProductSchema.parse(req.body);
-      const product = await storage.createProduct(productData);
-      res.status(201).json(product);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: 'Invalid product data', details: error.errors });
-      }
-      console.error('Create product error:', error);
-      res.status(500).json({ error: 'Failed to create product' });
-    }
-  });
-
-  // Get products for specific tenant (admin)
-  app.get('/api/admin/products/:tenantId', async (req, res) => {
-    try {
-      const tenantId = parseInt(req.params.tenantId);
-      if (!tenantId) {
-        return res.status(400).json({ error: 'Invalid tenant ID' });
-      }
-      const products = await storage.getProductsByTenant(tenantId);
+      const products = await storage.getAllProducts();
       res.json(products);
     } catch (error) {
-      console.error('Get products error:', error);
+      console.error('Get all products error:', error);
       res.status(500).json({ error: 'Failed to get products' });
     }
   });
 
-  // Get dashboard stats (admin)
-  app.get('/api/admin/stats', requireAuth, requirePlatformAdmin, async (req, res) => {
+
+
+  // Get all orders (admin)
+  app.get('/api/admin/orders', requireAuth, requirePlatformAdmin, async (req: AuthenticatedRequest, res) => {
     try {
-      const tenants = await storage.getAllTenants();
-      
-      // Get all orders from all tenants
-      const allOrders = [];
-      for (const tenant of tenants) {
-        const tenantOrders = await storage.getOrdersByTenant(tenant.id);
-        allOrders.push(...tenantOrders);
-      }
-
-      // Calculate stats from all tenants
-      const paidOrders = allOrders.filter(order => order.status === 'paid');
-      const totalRevenue = paidOrders.reduce((sum, order) => {
-        return sum + parseFloat(order.total);
-      }, 0);
-
-      const stats = {
-        totalTenants: tenants.length,
-        totalRevenue: `R ${totalRevenue.toFixed(2)}`,
-        totalOrders: allOrders.length,
-        activeUsers: paidOrders.length, // Number of completed payments
-      };
-
-      res.json(stats);
-    } catch (error) {
-      console.error('Get stats error:', error);
-      res.status(500).json({ error: 'Failed to get dashboard stats' });
-    }
-  });
-
-  // Get all orders across tenants (admin)
-  app.get('/api/admin/orders', async (req, res) => {
-    try {
-      // Get orders from all tenants by fetching all tenants first
-      const tenants = await storage.getAllTenants();
-      const allOrders = [];
-      
-      for (const tenant of tenants) {
-        const tenantOrders = await storage.getOrdersByTenant(tenant.id);
-        // Add tenant info to each order for admin display
-        const ordersWithTenant = tenantOrders.map(order => ({
-          ...order,
-          tenantName: tenant.name,
-          tenantSubdomain: tenant.subdomain
-        }));
-        allOrders.push(...ordersWithTenant);
-      }
+      const allOrders = await storage.getAllOrders();
       
       // Sort by creation date (newest first)
       allOrders.sort((a, b) => {
@@ -1443,21 +1726,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get payment transactions (admin)
-  app.get('/api/admin/payments', async (req, res) => {
+  app.get('/api/admin/payments', requireAuth, requirePlatformAdmin, async (req: AuthenticatedRequest, res) => {
     try {
-      // For now, we'll use orders as payment data since they contain payment info
-      const tenants = await storage.getAllTenants();
-      const allOrders = [];
-      
-      for (const tenant of tenants) {
-        const tenantOrders = await storage.getOrdersByTenant(tenant.id);
-        const ordersWithTenant = tenantOrders.map(order => ({
-          ...order,
-          tenantName: tenant.name,
-          tenantSubdomain: tenant.subdomain
-        }));
-        allOrders.push(...ordersWithTenant);
-      }
+      const allOrders = await storage.getAllOrders();
       
       // Filter to only paid orders for payment transactions
       const paidOrders = allOrders.filter(order => order.status === 'paid');
@@ -1478,16 +1749,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get payment statistics (admin)
-  app.get('/api/admin/payment-stats', async (req, res) => {
+  app.get('/api/admin/payment-stats', requireAuth, requirePlatformAdmin, async (req: AuthenticatedRequest, res) => {
     try {
-      const tenants = await storage.getAllTenants();
-      
-      // Get all orders from all tenants
-      const allOrders = [];
-      for (const tenant of tenants) {
-        const tenantOrders = await storage.getOrdersByTenant(tenant.id);
-        allOrders.push(...tenantOrders);
-      }
+      const allOrders = await storage.getAllOrders();
 
       // Calculate payment-specific stats
       const paidOrders = allOrders.filter(order => order.status === 'paid');
@@ -1532,122 +1796,157 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // === VENDOR API ENDPOINTS ===
-  
-  // Get vendor dashboard stats for tenant owner
-  app.get('/api/vendor/stats', requireAuth, requireTenantOwner, async (req: AuthenticatedRequest, res) => {
+  // Admin order status update
+  app.put('/api/admin/orders/:id/update-status', requireAuth, requirePlatformAdmin, async (req: AuthenticatedRequest, res) => {
     try {
-      const user = req.user!;
-      
-      // Get the tenant this user owns
-      let tenantId = user.tenantId;
-      if (!tenantId) {
-        return res.status(404).json({ error: 'No tenant associated with this user' });
+      const orderId = parseInt(req.params.id);
+      const { status } = req.body;
+
+      if (!orderId || !status) {
+        return res.status(400).json({ error: 'Order ID and status are required' });
       }
 
-      // Get tenant orders
-      const orders = await storage.getOrdersByTenant(tenantId);
-      const paidOrders = orders.filter(order => order.status === 'paid');
-      
-      // Calculate revenue
-      const totalRevenue = paidOrders.reduce((sum, order) => {
-        return sum + parseFloat(order.total);
-      }, 0);
+      // Valid status transitions
+      const validStatuses = ['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled'];
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({ error: 'Invalid status' });
+      }
 
-      // Get products for this tenant
-      const products = await storage.getProductsByTenant(tenantId);
+      // Get order
+      const order = await storage.getOrder(orderId);
+      if (!order) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
 
-      // Get unique customers (based on email from orders)
-      const uniqueCustomers = new Set();
-      paidOrders.forEach(order => {
-        if (order.customerEmail) {
-          uniqueCustomers.add(order.customerEmail);
-        }
-      });
-
-      const vendorStats = {
-        totalRevenue: `R ${totalRevenue.toFixed(2)}`,
-        totalOrders: orders.length,
-        totalProducts: products.length,
-        totalCustomers: uniqueCustomers.size,
+      // Validate status transition
+      const currentStatus = order.status;
+      const validTransitions: Record<string, string[]> = {
+        'pending': ['paid', 'cancelled'],
+        'paid': ['processing', 'cancelled'],
+        'processing': ['shipped', 'cancelled'],
+        'shipped': ['delivered'],
+        'delivered': [],
+        'cancelled': []
       };
 
-      res.json(vendorStats);
-    } catch (error) {
-      console.error('Get vendor stats error:', error);
-      res.status(500).json({ error: 'Failed to get vendor statistics' });
-    }
-  });
-
-  // Get vendor orders
-  app.get('/api/vendor/orders', requireAuth, requireTenantOwner, async (req: AuthenticatedRequest, res) => {
-    try {
-      const user = req.user!;
-      
-      let tenantId = user.tenantId;
-      if (!tenantId) {
-        return res.status(404).json({ error: 'No tenant associated with this user' });
+      if (!validTransitions[currentStatus]?.includes(status)) {
+        return res.status(400).json({ 
+          error: `Cannot change status from ${currentStatus} to ${status}`,
+          validTransitions: validTransitions[currentStatus] || []
+        });
       }
 
-      const orders = await storage.getOrdersByTenant(tenantId);
-      
-      // Sort by creation date (newest first)
-      orders.sort((a, b) => {
-        if (!a.createdAt && !b.createdAt) return 0;
-        if (!a.createdAt) return 1;
-        if (!b.createdAt) return -1;
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      // Update order status
+      const updatedOrder = await storage.updateOrderStatus(orderId, status);
+
+      if (!updatedOrder) {
+        return res.status(500).json({ error: 'Failed to update order status' });
+      }
+
+      // Send notifications if status changed to shipped or delivered
+      if (status === 'shipped' || status === 'delivered') {
+        try {
+          const storeSettings = await storage.getStoreSettings();
+          if (storeSettings && order.customerEmail) {
+            // Send email notification
+            await emailService.sendOrderStatusUpdate({
+              customerEmail: order.customerEmail,
+              customerName: order.customerName,
+              orderId: order.id,
+              orderNumber: order.orderNumber,
+              storeName: storeSettings.name,
+              status: status,
+              trackingInfo: order.pudoTrackingReference || undefined,
+            });
+
+            // Send WhatsApp notification if customer phone is available
+            if (order.customerPhone && storeSettings.whatsappPhone) {
+              try {
+                await whatsappService.sendOrderStatusUpdate(
+                  order.customerPhone,
+                  {
+                    orderId: order.id,
+                    storeName: storeSettings.name,
+                    status: status,
+                    trackingInfo: order.pudoTrackingReference || undefined,
+                  }
+                );
+                console.log(`WhatsApp status update sent for order ${orderId}`);
+              } catch (whatsappError) {
+                console.error('Failed to send WhatsApp status update:', whatsappError);
+              }
+            }
+          }
+        } catch (emailError) {
+          console.error('Failed to send status update email:', emailError);
+          // Don't fail the request if email fails
+        }
+      }
+
+      res.json({ 
+        success: true, 
+        order: updatedOrder,
+        message: `Order status updated to ${status}`
       });
-
-      res.json(orders);
     } catch (error) {
-      console.error('Get vendor orders error:', error);
-      res.status(500).json({ error: 'Failed to get vendor orders' });
+      console.error('Update order status error:', error);
+      res.status(500).json({ error: 'Failed to update order status' });
     }
   });
 
-  // Get vendor products
-  app.get('/api/vendor/products', requireAuth, requireTenantOwner, async (req: AuthenticatedRequest, res) => {
+  // Admin product image upload
+  app.post('/api/admin/products/upload-image', requireAuth, requirePlatformAdmin, async (req: AuthenticatedRequest, res) => {
     try {
-      const user = req.user!;
-      
-      let tenantId = user.tenantId;
-      if (!tenantId) {
-        return res.status(404).json({ error: 'No tenant associated with this user' });
+      const { imageBase64 } = req.body;
+
+      if (!imageBase64) {
+        return res.status(400).json({ error: 'Image data is required' });
       }
 
-      const products = await storage.getProductsByTenant(tenantId);
-      res.json(products);
-    } catch (error) {
-      console.error('Get vendor products error:', error);
-      res.status(500).json({ error: 'Failed to get vendor products' });
+      if (!cloudinaryService.isConfigured()) {
+        return res.status(500).json({ 
+          error: 'Image upload is not configured. Please configure Cloudinary environment variables.' 
+        });
+      }
+
+      // Upload to Cloudinary
+      const uploadResult = await cloudinaryService.uploadImageFromBase64(
+        imageBase64,
+        'products'
+      );
+
+      res.json({
+        success: true,
+        imageUrl: uploadResult.secure_url,
+        publicId: uploadResult.public_id,
+      });
+    } catch (error: any) {
+      console.error('Image upload error:', error);
+      res.status(500).json({ 
+        error: 'Failed to upload image',
+        message: error.message || 'Unknown error'
+      });
     }
   });
 
-  // Create new product
-  app.post('/api/vendor/products', requireAuth, requireTenantOwner, async (req: AuthenticatedRequest, res) => {
+  // Admin create product
+  app.post('/api/admin/products', requireAuth, requirePlatformAdmin, async (req: AuthenticatedRequest, res) => {
     try {
-      const user = req.user!;
-      let tenantId = user.tenantId;
-      
-      if (!tenantId) {
-        return res.status(404).json({ error: 'No tenant associated with this user' });
-      }
-
-      const { name, description, price, stock, pudoWeight, pudoDimensions } = req.body;
+      const { name, description, price, stock, pudoWeight, pudoDimensions, imageUrl, category } = req.body;
 
       if (!name || !price || stock === undefined || !pudoWeight || !pudoDimensions) {
         return res.status(400).json({ error: 'Missing required fields' });
       }
 
       const product = await storage.createProduct({
-        tenantId,
         name,
         description: description || '',
-        price: parseFloat(price),
+        price: typeof price === 'number' ? price.toString() : price,
         stock: parseInt(stock),
-        pudoWeight: parseFloat(pudoWeight),
+        pudoWeight: typeof pudoWeight === 'number' ? pudoWeight.toString() : pudoWeight,
         pudoDimensions: JSON.stringify(pudoDimensions),
+        imageUrl: imageUrl || null,
+        category: category || null,
       });
 
       res.json(product);
@@ -1657,32 +1956,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Update product
-  app.put('/api/vendor/products/:id', requireAuth, requireTenantOwner, async (req: AuthenticatedRequest, res) => {
+  // Admin update product
+  app.put('/api/admin/products/:id', requireAuth, requirePlatformAdmin, async (req: AuthenticatedRequest, res) => {
     try {
-      const user = req.user!;
       const productId = parseInt(req.params.id);
-      let tenantId = user.tenantId;
-      
-      if (!tenantId) {
-        return res.status(404).json({ error: 'No tenant associated with this user' });
-      }
+      const { name, description, price, stock, pudoWeight, pudoDimensions, imageUrl, category } = req.body;
 
-      // Verify product belongs to this tenant
-      const existingProduct = await storage.getProduct(productId, tenantId);
+      // Verify product exists
+      const existingProduct = await storage.getProduct(productId);
       if (!existingProduct) {
         return res.status(404).json({ error: 'Product not found' });
       }
 
-      const { name, description, price, stock, pudoWeight, pudoDimensions } = req.body;
-
       const updateData: any = {};
       if (name !== undefined) updateData.name = name;
       if (description !== undefined) updateData.description = description;
-      if (price !== undefined) updateData.price = parseFloat(price);
+      if (price !== undefined) updateData.price = typeof price === 'number' ? price.toString() : price;
       if (stock !== undefined) updateData.stock = parseInt(stock);
-      if (pudoWeight !== undefined) updateData.pudoWeight = parseFloat(pudoWeight);
+      if (pudoWeight !== undefined) updateData.pudoWeight = typeof pudoWeight === 'number' ? pudoWeight.toString() : pudoWeight;
       if (pudoDimensions !== undefined) updateData.pudoDimensions = JSON.stringify(pudoDimensions);
+      if (imageUrl !== undefined) updateData.imageUrl = imageUrl;
+      if (category !== undefined) updateData.category = category;
 
       const updatedProduct = await storage.updateProduct(productId, updateData);
       res.json(updatedProduct);
@@ -1692,26 +1986,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Delete product
-  app.delete('/api/vendor/products/:id', requireAuth, requireTenantOwner, async (req: AuthenticatedRequest, res) => {
+  // Admin delete product
+  app.delete('/api/admin/products/:id', requireAuth, requirePlatformAdmin, async (req: AuthenticatedRequest, res) => {
     try {
-      const user = req.user!;
       const productId = parseInt(req.params.id);
-      let tenantId = user.tenantId;
-      
-      if (!tenantId) {
-        return res.status(404).json({ error: 'No tenant associated with this user' });
-      }
 
-      // Verify product belongs to this tenant
-      const existingProduct = await storage.getProduct(productId, tenantId);
+      // Verify product exists
+      const existingProduct = await storage.getProduct(productId);
       if (!existingProduct) {
         return res.status(404).json({ error: 'Product not found' });
       }
 
-      // Note: In production, you might want to soft delete or check for existing orders
-      // For now, we'll assume simple delete
-      await storage.updateProduct(productId, { stock: 0 }); // Soft delete by setting stock to 0
+      // Soft delete by setting stock to 0
+      await storage.updateProduct(productId, { stock: 0 });
       
       res.json({ message: 'Product deactivated successfully' });
     } catch (error) {
@@ -1758,7 +2045,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             </div>
             
             <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #666; font-size: 12px;">
-              <p>This email was sent from the Creative Crafts Studio contact form.</p>
+              <p>This email was sent from the Fashion Store contact form.</p>
             </div>
           </div>
         `,

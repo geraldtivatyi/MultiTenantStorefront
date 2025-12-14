@@ -1,8 +1,13 @@
+import { useStoreSettings } from "@/hooks/use-store-settings";
 import { Link } from "wouter";
-import { useTenant } from "@/hooks/use-tenant";
 
 export function Footer() {
-  const { data: tenant } = useTenant();
+  const { data: storeSettings } = useStoreSettings();
+
+  // Scroll to top when clicking footer links
+  const handleLinkClick = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   return (
     <footer className="bg-gray-900 text-white py-12">
@@ -10,28 +15,55 @@ export function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           <div>
             <h3 className="text-lg font-semibold mb-4">
-              {tenant?.name || "Store"}
+              {storeSettings?.name || "M Blessings"}
             </h3>
-            <p className="text-gray-400">Your trusted technology partner</p>
+            <p className="text-gray-400">{storeSettings?.heroSubtitle || "Your trusted online store"}</p>
           </div>
           
           <div>
             <h4 className="font-semibold mb-4">Quick Links</h4>
             <ul className="space-y-2 text-gray-400">
-              <li><Link href="/about" className="hover:text-white transition-colors">About Us</Link></li>
-              <li><Link href="/contact" className="hover:text-white transition-colors">Contact</Link></li>
-              <li><Link href="/shipping-info" className="hover:text-white transition-colors">Shipping Info</Link></li>
-              <li><Link href="/search" className="hover:text-white transition-colors">Search Products</Link></li>
+              <li>
+                <Link href="/about" className="hover:text-white transition-colors" onClick={handleLinkClick}>
+                  About Us
+                </Link>
+              </li>
+              <li>
+                <Link href="/contact" className="hover:text-white transition-colors" onClick={handleLinkClick}>
+                  Contact
+                </Link>
+              </li>
+              <li>
+                <Link href="/shipping-info" className="hover:text-white transition-colors" onClick={handleLinkClick}>
+                  Shipping Info
+                </Link>
+              </li>
+              <li>
+                <Link href="/" className="hover:text-white transition-colors" onClick={handleLinkClick}>
+                  Home
+                </Link>
+              </li>
             </ul>
           </div>
           
           <div>
-            <h4 className="font-semibold mb-4">Shop</h4>
+            <h4 className="font-semibold mb-4">Account</h4>
             <ul className="space-y-2 text-gray-400">
-              <li><Link href="/search?category=Art Supplies" className="hover:text-white transition-colors">Art Supplies</Link></li>
-              <li><Link href="/search?category=Craft Tools" className="hover:text-white transition-colors">Craft Tools</Link></li>
-              <li><Link href="/search?category=Paint & Brushes" className="hover:text-white transition-colors">Paint & Brushes</Link></li>
-              <li><Link href="/search?category=Paper & Canvas" className="hover:text-white transition-colors">Paper & Canvas</Link></li>
+              <li>
+                <Link href="/register" className="hover:text-white transition-colors" onClick={handleLinkClick}>
+                  Create Account
+                </Link>
+              </li>
+              <li>
+                <Link href="/login" className="hover:text-white transition-colors" onClick={handleLinkClick}>
+                  Sign In
+                </Link>
+              </li>
+              <li>
+                <Link href="/my-orders" className="hover:text-white transition-colors" onClick={handleLinkClick}>
+                  My Orders
+                </Link>
+              </li>
             </ul>
           </div>
           
@@ -62,12 +94,12 @@ export function Footer() {
         
         <div className="border-t border-gray-800 mt-8 pt-8">
           <div className="flex flex-col md:flex-row justify-between items-center text-gray-400">
-            <p>&copy; 2024 {tenant?.name || "Store"}. All rights reserved.</p>
+            <p>&copy; 2024 {storeSettings?.name || "M Blessings"}. All rights reserved.</p>
             <div className="flex space-x-4 mt-4 md:mt-0">
-              <Link href="/privacy-policy" className="hover:text-white transition-colors text-sm">
+              <Link href="/privacy-policy" className="hover:text-white transition-colors text-sm" onClick={handleLinkClick}>
                 Privacy Policy
               </Link>
-              <Link href="/terms-of-service" className="hover:text-white transition-colors text-sm">
+              <Link href="/terms-of-service" className="hover:text-white transition-colors text-sm" onClick={handleLinkClick}>
                 Terms of Service
               </Link>
             </div>

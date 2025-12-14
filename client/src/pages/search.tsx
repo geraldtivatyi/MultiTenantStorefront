@@ -4,7 +4,6 @@ import { useSearch, useLocation, Link } from "wouter";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { ProductCard } from "@/components/product/product-card";
-import { useTenant } from "@/hooks/use-tenant";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -29,12 +28,9 @@ export function Search() {
   const [sortBy, setSortBy] = useState(initialSort);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [showFilters, setShowFilters] = useState(false);
-
-  const { data: tenant, isLoading: tenantLoading } = useTenant();
   
   const { data: products = [], isLoading: productsLoading, error: productsError } = useQuery<Product[]>({
     queryKey: ["/api/storefront/products"],
-    enabled: !!tenant,
   });
 
   // Get unique categories
@@ -139,7 +135,7 @@ export function Search() {
     <div className="min-h-screen bg-background">
       <Header />
       
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 overflow-x-hidden">
         {/* Search Header */}
         <div className="mb-8">
           <div className="flex items-center gap-4 mb-4">
@@ -184,7 +180,7 @@ export function Search() {
         </div>
 
         {/* Filters and Controls */}
-        <div className="flex flex-col lg:flex-row gap-8">
+        <div className="flex flex-col lg:flex-row gap-8 w-full">
           {/* Sidebar Filters */}
           <div className="lg:w-64 shrink-0">
             <Card>
@@ -237,7 +233,7 @@ export function Search() {
           </div>
 
           {/* Main Content */}
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             {/* Toolbar */}
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-4">
@@ -328,11 +324,11 @@ export function Search() {
               </div>
             ) : (
               <div className={viewMode === 'grid' 
-                ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
-                : "space-y-4"
+                ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 sm:gap-6 lg:gap-8 w-full"
+                : "space-y-4 w-full"
               }>
                 {filteredProducts.map((product) => (
-                  <div key={product.id}>
+                  <div key={product.id} className={viewMode === 'grid' ? "w-full min-w-0" : ""}>
                     {viewMode === 'grid' ? (
                       <ProductCard 
                         product={product}

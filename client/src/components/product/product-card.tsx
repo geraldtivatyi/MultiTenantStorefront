@@ -21,17 +21,18 @@ export function ProductCard({ product, onViewDetails }: ProductCardProps) {
         title: "Added to cart",
         description: `${product.name} has been added to your cart.`,
       });
-    } catch (error) {
+    } catch (error: any) {
+      const errorMessage = error?.message || "Failed to add item to cart. Please try again.";
       toast({
-        title: "Error",
-        description: "Failed to add item to cart. Please try again.",
+        title: errorMessage.includes("stock") || errorMessage.includes("available") ? "Stock Issue" : "Error",
+        description: errorMessage,
         variant: "destructive",
       });
     }
   };
 
   return (
-    <Card className="bg-white rounded-lg shadow-md hover:shadow-xl transition-shadow duration-300 overflow-hidden h-full flex flex-col">
+    <Card className="bg-white rounded-lg shadow-md hover:shadow-xl transition-shadow duration-300 overflow-hidden h-full flex flex-col w-full max-w-full">
       <div 
         className="w-full h-48 sm:h-56 bg-gray-200 bg-cover bg-center cursor-pointer flex-shrink-0"
         style={{
@@ -46,7 +47,7 @@ export function ProductCard({ product, onViewDetails }: ProductCardProps) {
         )}
       </div>
       
-      <CardContent className="p-4 sm:p-6 flex-1 flex flex-col">
+      <CardContent className="p-4 sm:p-6 flex-1 flex flex-col min-w-0">
         <h3 
           className="text-base sm:text-lg font-semibold mb-2 cursor-pointer hover:text-primary-brand transition-colors line-clamp-2"
           onClick={() => onViewDetails?.(product)}

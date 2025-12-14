@@ -3,28 +3,33 @@ import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// Tenants table for multi-tenant architecture
-export const tenants = pgTable("tenants", {
+// Store settings table (singleton - only one row)
+export const storeSettings = pgTable("store_settings", {
   id: serial("id").primaryKey(),
-  name: text("name").notNull(),
-  subdomain: text("subdomain").notNull().unique(),
-  ownerId: integer("owner_id").references(() => users.id),
-  ownerName: text("owner_name"),
-  ownerEmail: text("owner_email").notNull(),
-  ownerPhone: text("owner_phone"),
-  businessType: text("business_type").default("other"), // spaza_shop, street_vendor, home_business, market_stall, online_store, other
+  name: text("name").notNull().default("M Blessings"),
   description: text("description"),
   address: text("address"),
-  isActive: boolean("is_active").default(true),
-  createdAt: timestamp("created_at").defaultNow(),
   heroTitle: text("hero_title"),
   heroSubtitle: text("hero_subtitle"),
+  heroImageUrl: text("hero_image_url"), // Custom hero background image for storefront
   whatsappPhone: text("whatsapp_phone"), // WhatsApp number for order notifications
   // Delivery options
-  deliveryOptions: text("delivery_options").array().default(["collection"]), // collection, pudo, standard_delivery
-  // Pudo settings (API key is now centralized)
-  pudoCollectionAddress: json("pudo_collection_address"), // vendor's collection address for Pudo
+  deliveryOptions: text("delivery_options").array().default(["collection", "pudo"]), // collection, pudo
+  // Pudo settings
+  pudoCollectionAddress: json("pudo_collection_address"), // collection address for Pudo
   pudoPreferredLocker: text("pudo_preferred_locker"), // preferred Pudo locker location
+  // About page content
+  aboutStory: text("about_story"), // Store's story/background
+  aboutValues: json("about_values"), // Array of value objects with title, description, icon
+  aboutStats: json("about_stats"), // Store statistics (products count, customers, orders, satisfaction)
+  aboutImages: json("about_images"), // Array of image URLs for the about page
+  // Contact page content
+  contactEmail: text("contact_email"), // Store's contact email
+  contactPhone: text("contact_phone"), // Store's contact phone
+  contactAddress: text("contact_address"), // Store's physical address
+  storeHours: json("store_hours"), // Store operating hours (e.g., {monday: "9AM-6PM", tuesday: "9AM-6PM", ...})
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 // Users table
@@ -36,10 +41,13 @@ export const users = pgTable("users", {
   firstName: text("first_name"),
   lastName: text("last_name"),
   phone: text("phone"),
-  tenantId: integer("tenant_id").references(() => tenants.id),
-  role: text("role").notNull().default("customer"), // platform_admin, tenant_owner, customer
+  role: text("role").notNull().default("customer"), // platform_admin, customer
   isAdmin: boolean("is_admin").default(false), // deprecated, use role instead
   emailVerified: boolean("email_verified").default(false),
+  emailVerificationToken: text("email_verification_token"),
+  emailVerificationTokenExpires: timestamp("email_verification_token_expires"),
+  passwordResetToken: text("password_reset_token"),
+  passwordResetTokenExpires: timestamp("password_reset_token_expires"),
   isActive: boolean("is_active").default(true),
   lastLoginAt: timestamp("last_login_at"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -83,10 +91,9 @@ export const userPreferences = pgTable("user_preferences", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Products table with tenant isolation
+// Products table
 export const products = pgTable("products", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
   name: text("name").notNull(),
   description: text("description"),
   longDescription: text("long_description"),
@@ -114,11 +121,11 @@ export const cartItems = pgTable("cart_items", {
 // Orders table
 export const orders = pgTable("orders", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
   userId: integer("user_id").references(() => users.id), // Optional - for authenticated users
   orderNumber: text("order_number").notNull().unique(),
   customerEmail: text("customer_email").notNull(),
   customerName: text("customer_name").notNull(),
+  customerPhone: text("customer_phone"), // Customer phone number for notifications
   shippingAddress: text("shipping_address").notNull(),
   city: text("city").notNull(),
   postalCode: text("postal_code").notNull(),
@@ -126,8 +133,10 @@ export const orders = pgTable("orders", {
   tax: decimal("tax", { precision: 10, scale: 2 }).notNull(),
   shippingCost: decimal("shipping_cost", { precision: 10, scale: 2 }).default("0.00"),
   total: decimal("total", { precision: 10, scale: 2 }).notNull(),
-  deliveryMethod: text("delivery_method").default("collection"), // collection, standard_delivery, pudo
+  deliveryMethod: text("delivery_method").default("collection"), // collection, pudo
   pudoLocker: text("pudo_locker"), // Pudo locker ID when delivery method is pudo
+  pudoShipmentId: integer("pudo_shipment_id"), // Pudo shipment ID after creation
+  pudoTrackingReference: text("pudo_tracking_reference"), // Pudo tracking reference for customer tracking
   status: text("status").notNull().default("pending"), // pending, paid, shipped, delivered, cancelled
   paystackReference: text("paystack_reference"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -156,17 +165,7 @@ export const paymentTransactions = pgTable("payment_transactions", {
 });
 
 // Relations
-export const tenantsRelations = relations(tenants, ({ many }) => ({
-  users: many(users),
-  products: many(products),
-  orders: many(orders),
-}));
-
 export const usersRelations = relations(users, ({ one, many }) => ({
-  tenant: one(tenants, {
-    fields: [users.tenantId],
-    references: [tenants.id],
-  }),
   sessions: many(userSessions),
   addresses: many(userAddresses),
   preferences: one(userPreferences),
@@ -180,11 +179,7 @@ export const userSessionsRelations = relations(userSessions, ({ one }) => ({
   }),
 }));
 
-export const productsRelations = relations(products, ({ one, many }) => ({
-  tenant: one(tenants, {
-    fields: [products.tenantId],
-    references: [tenants.id],
-  }),
+export const productsRelations = relations(products, ({ many }) => ({
   cartItems: many(cartItems),
   orderItems: many(orderItems),
 }));
@@ -197,10 +192,6 @@ export const cartItemsRelations = relations(cartItems, ({ one }) => ({
 }));
 
 export const ordersRelations = relations(orders, ({ one, many }) => ({
-  tenant: one(tenants, {
-    fields: [orders.tenantId],
-    references: [tenants.id],
-  }),
   user: one(users, {
     fields: [orders.userId],
     references: [users.id],
@@ -242,9 +233,10 @@ export const userPreferencesRelations = relations(userPreferences, ({ one }) => 
 }));
 
 // Insert schemas
-export const insertTenantSchema = createInsertSchema(tenants).omit({
+export const insertStoreSettingsSchema = createInsertSchema(storeSettings).omit({
   id: true,
   createdAt: true,
+  updatedAt: true,
 });
 
 export const insertUserSchema = createInsertSchema(users).omit({
@@ -261,6 +253,12 @@ export const insertUserSessionSchema = createInsertSchema(userSessions).omit({
 export const insertProductSchema = createInsertSchema(products).omit({
   id: true,
   createdAt: true,
+}).extend({
+  price: z.union([z.string(), z.number()]).transform((val) => typeof val === 'number' ? val.toString() : val),
+  pudoWeight: z.union([z.string(), z.number(), z.null()]).optional().transform((val) => {
+    if (val === null || val === undefined) return val;
+    return typeof val === 'number' ? val.toString() : val;
+  }),
 });
 
 export const insertCartItemSchema = createInsertSchema(cartItems).omit({
@@ -296,8 +294,8 @@ export const insertUserPreferencesSchema = createInsertSchema(userPreferences).o
 });
 
 // Types
-export type Tenant = typeof tenants.$inferSelect;
-export type InsertTenant = z.infer<typeof insertTenantSchema>;
+export type StoreSettings = typeof storeSettings.$inferSelect;
+export type InsertStoreSettings = z.infer<typeof insertStoreSettingsSchema>;
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type Product = typeof products.$inferSelect;

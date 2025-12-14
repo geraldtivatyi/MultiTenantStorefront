@@ -46,12 +46,12 @@ export function calculateCartTotal(items: any[]): { subtotal: number; tax: numbe
   const subtotal = items.reduce((sum, item) => 
     sum + (parseFloat(item.product.price) * item.quantity), 0
   );
-  const tax = subtotal * 0.08; // 8% tax
-  const total = subtotal + tax;
+  const tax = 0; // No tax - client does not have VAT yet
+  const total = subtotal; // Total equals subtotal (no tax)
   
   return {
     subtotal: Math.round(subtotal * 100) / 100,
-    tax: Math.round(tax * 100) / 100,
+    tax: 0,
     total: Math.round(total * 100) / 100,
   };
 }

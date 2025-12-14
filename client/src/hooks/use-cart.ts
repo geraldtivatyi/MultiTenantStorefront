@@ -15,20 +15,41 @@ export function useCart() {
   const addToCartMutation = useMutation({
     mutationFn: async (data: { productId: number; quantity: number }) => {
       const response = await apiRequest("/api/cart", "POST", data);
-      return response.json();
+      const result = await response.json();
+      
+      // Check for stock-related errors
+      if (response.status === 400 && result.error) {
+        throw new Error(result.error);
+      }
+      
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/cart"] });
+    },
+    onError: (error: any) => {
+      // Error will be handled by the component using this hook
+      console.error('Add to cart error:', error);
     },
   });
 
   const updateCartMutation = useMutation({
     mutationFn: async (data: { id: number; quantity: number }) => {
       const response = await apiRequest(`/api/cart/${data.id}`, "PUT", { quantity: data.quantity });
-      return response.json();
+      const result = await response.json();
+      
+      // Check for stock-related errors
+      if (response.status === 400 && result.error) {
+        throw new Error(result.error);
+      }
+      
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/cart"] });
+    },
+    onError: (error: any) => {
+      console.error('Update cart error:', error);
     },
   });
 

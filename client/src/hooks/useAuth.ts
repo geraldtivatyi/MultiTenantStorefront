@@ -8,8 +8,7 @@ export interface User {
   firstName?: string;
   lastName?: string;
   phone?: string;
-  tenantId?: number;
-  role: string; // platform_admin, tenant_owner, customer
+  role: string; // platform_admin, customer
   isAdmin: boolean; // deprecated, use role instead
   emailVerified: boolean;
   isActive: boolean;

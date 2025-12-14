@@ -446,6 +446,19 @@ export function MyOrders() {
                           </p>
                         )}
                         
+                        {order.pudoTrackingReference && (
+                          <div className="pt-3 border-t">
+                            <div className="flex items-center gap-2">
+                              <Truck className="h-4 w-4 text-muted-foreground" />
+                              <div>
+                                <p className="text-sm font-medium">Tracking Reference</p>
+                                <p className="text-sm text-muted-foreground font-mono">
+                                  {order.pudoTrackingReference}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                         <div className="pt-3 border-t">
                           <div className="flex justify-between items-center">
                             <span className="font-medium">Total</span>

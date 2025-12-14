@@ -13,24 +13,32 @@ import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCart } from "@/hooks/use-cart";
-import { useTenant } from "@/hooks/use-tenant";
+import { useStoreSettings } from "@/hooks/use-store-settings";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { calculateCartTotal, formatPrice } from "@/lib/utils";
 import { paystackService } from "@/lib/paystack";
-import { ArrowLeft, Lock, CreditCard, Banknote, Smartphone } from "lucide-react";
+import { ArrowLeft, Lock, CreditCard, Banknote } from "lucide-react";
 
 const checkoutSchema = z.object({
   customerEmail: z.string().email("Please enter a valid email address"),
   customerName: z.string().min(1, "Name is required"),
+  customerPhone: z.string().optional().refine((val) => {
+    if (!val || val.trim() === "") return true; // Optional field
+    // South African phone number validation: +27XXXXXXXXX or 0XXXXXXXXX
+    const phoneRegex = /^(\+27|0)[0-9]{9}$/;
+    return phoneRegex.test(val.replace(/\s/g, ""));
+  }, {
+    message: "Please enter a valid South African phone number (e.g., +27812345678 or 0812345678)",
+  }),
   shippingAddress: z.string().min(1, "Address is required"),
   city: z.string().min(1, "City is required"),
   postalCode: z.string().min(1, "Postal code is required"),
-  deliveryMethod: z.enum(["collection", "standard_delivery", "pudo"], {
+  deliveryMethod: z.enum(["collection", "pudo"], {
     required_error: "Please select a delivery method",
   }),
   pudoLocker: z.string().optional(),
-  paymentMethod: z.enum(["card", "bank", "ussd"], {
+  paymentMethod: z.enum(["card", "bank"], {
     required_error: "Please select a payment method",
   }),
 }).refine((data) => {
@@ -55,18 +63,40 @@ export function Checkout() {
   const [isCalculatingShipping, setIsCalculatingShipping] = useState(false);
   
   const { cartItems, isLoading: cartLoading } = useCart();
-  const { data: tenant } = useTenant();
+  const { data: storeSettings, isLoading: settingsLoading, error: settingsError } = useStoreSettings();
   const { toast } = useToast();
+  
+  // Get delivery options with fallback
+  const deliveryOptions = React.useMemo(() => {
+    if (storeSettings?.deliveryOptions && storeSettings.deliveryOptions.length > 0) {
+      return storeSettings.deliveryOptions;
+    }
+    // Default to both options
+    return ["collection", "pudo"];
+  }, [storeSettings]);
+  
+  // Debug: Log store settings
+  React.useEffect(() => {
+    if (storeSettings) {
+      console.log('Store settings in checkout:', storeSettings);
+      console.log('Delivery options:', storeSettings.deliveryOptions);
+      console.log('Computed delivery options:', deliveryOptions);
+    }
+    if (settingsError) {
+      console.error('Store settings error:', settingsError);
+    }
+  }, [storeSettings, settingsError, deliveryOptions]);
   const { subtotal, tax, total } = calculateCartTotal(cartItems);
   
-  // Calculate total with shipping
-  const finalTotal = total + shippingCost;
+  // Calculate total with shipping (no tax)
+  const finalTotal = subtotal + shippingCost;
 
   const form = useForm<CheckoutFormData>({
     resolver: zodResolver(checkoutSchema),
     defaultValues: {
       customerEmail: "",
       customerName: "",
+      customerPhone: "",
       shippingAddress: "",
       city: "",
       postalCode: "",
@@ -180,10 +210,8 @@ export function Checkout() {
         }
       };
       calculateShipping();
-    } else if (deliveryMethod === "standard_delivery") {
-      // Set a fixed rate for standard delivery
-      setShippingCost(89.99);
     } else {
+      // Collection is free
       setShippingCost(0);
     }
   }, [form.watch("pudoLocker"), cartItems]);
@@ -268,11 +296,24 @@ export function Checkout() {
           });
         },
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Checkout error:", error);
-      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+      let errorMessage = "Unknown error occurred";
+      let errorTitle = "Checkout failed";
+      
+      if (error?.message) {
+        errorMessage = error.message;
+        if (errorMessage.includes("stock") || errorMessage.includes("available")) {
+          errorTitle = "Stock Issue";
+        } else if (errorMessage.includes("Cart is empty")) {
+          errorTitle = "Empty Cart";
+        }
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      
       toast({
-        title: "Checkout failed",
+        title: errorTitle,
         description: `${errorMessage}. Please try again or contact support if the problem persists.`,
         variant: "destructive",
       });
@@ -365,20 +406,40 @@ export function Checkout() {
                           </FormItem>
                         )}
                       />
-                      <FormField
-                        control={form.control}
-                        name="customerEmail"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Email</FormLabel>
-                            <FormControl>
-                              <Input type="email" placeholder="john@example.com" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                    <FormField
+                      control={form.control}
+                      name="customerEmail"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Email</FormLabel>
+                          <FormControl>
+                            <Input type="email" placeholder="john@example.com" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                     </div>
+                    <FormField
+                      control={form.control}
+                      name="customerPhone"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Phone Number (Optional)</FormLabel>
+                          <FormControl>
+                            <Input 
+                              type="tel" 
+                              placeholder="+27812345678 or 0812345678" 
+                              {...field} 
+                            />
+                          </FormControl>
+                          <FormMessage />
+                          <p className="text-xs text-muted-foreground">
+                            We'll use this to send order updates via WhatsApp
+                          </p>
+                        </FormItem>
+                      )}
+                    />
                     <FormField
                       control={form.control}
                       name="shippingAddress"
@@ -440,7 +501,7 @@ export function Checkout() {
                               defaultValue={field.value}
                               className="space-y-4"
                             >
-                              {tenant?.deliveryOptions?.includes("collection") && (
+                              {deliveryOptions.includes("collection") && (
                                 <div className="flex items-center space-x-3 p-4 border border-primary-brand rounded-lg bg-primary-brand/5">
                                   <RadioGroupItem value="collection" id="collection" />
                                   <div className="flex-1">
@@ -452,21 +513,8 @@ export function Checkout() {
                                   <span className="text-sm font-semibold text-secondary-brand">R0.00</span>
                                 </div>
                               )}
-                              
-                              {tenant?.deliveryOptions?.includes("standard_delivery") && (
-                                <div className="flex items-center space-x-3 p-4 border border-gray-300 rounded-lg">
-                                  <RadioGroupItem value="standard_delivery" id="standard_delivery" />
-                                  <div className="flex-1">
-                                    <label htmlFor="standard_delivery" className="font-medium cursor-pointer block">
-                                      Standard Delivery
-                                    </label>
-                                    <p className="text-sm text-muted-foreground">Direct to your address</p>
-                                  </div>
-                                  <span className="text-sm font-semibold text-secondary-brand">R89.99</span>
-                                </div>
-                              )}
 
-                              {tenant?.deliveryOptions?.includes("pudo") && (
+                              {deliveryOptions.includes("pudo") && (
                                 <div className="flex items-center space-x-3 p-4 border border-gray-300 rounded-lg">
                                   <RadioGroupItem value="pudo" id="pudo" />
                                   <div className="flex-1">
@@ -610,13 +658,6 @@ export function Checkout() {
                                 </label>
                                 <Banknote className="h-5 w-5 text-gray-600" />
                               </div>
-                              <div className="flex items-center space-x-3 p-4 border border-gray-300 rounded-lg">
-                                <RadioGroupItem value="ussd" id="ussd" />
-                                <label htmlFor="ussd" className="font-medium cursor-pointer flex-1">
-                                  USSD
-                                </label>
-                                <Smartphone className="h-5 w-5 text-gray-600" />
-                              </div>
                             </RadioGroup>
                           </FormControl>
                           <FormMessage />
@@ -698,10 +739,6 @@ export function Checkout() {
                     <span className={shippingCost === 0 ? "text-secondary-brand" : ""}>
                       {shippingCost === 0 ? "Free" : formatPrice(shippingCost)}
                     </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Tax</span>
-                    <span>{formatPrice(tax)}</span>
                   </div>
                   <div className="border-t pt-2 mt-3">
                     <div className="flex justify-between text-lg font-bold">

@@ -1,12 +1,12 @@
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
-import { useTenant } from "@/hooks/use-tenant";
+import { useStoreSettings } from "@/hooks/use-store-settings";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileText, Scale, CreditCard, Truck, RotateCcw, AlertTriangle } from "lucide-react";
 
 export function TermsOfService() {
-  const { data: tenant, isLoading } = useTenant();
+  const { data: storeSettings, isLoading } = useStoreSettings();
 
   return (
     <div className="min-h-screen bg-background">
@@ -31,7 +31,7 @@ export function TermsOfService() {
                 Terms of Service
               </h1>
               <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
-                These terms govern your use of {tenant?.name || "Creative Crafts Studio"} and 
+                These terms govern your use of {storeSettings?.name || "M Blessings"} and 
                 outline the rights and responsibilities of both parties.
               </p>
               <p className="text-sm text-muted-foreground mt-4">
@@ -224,7 +224,7 @@ export function TermsOfService() {
             <CardContent className="space-y-4">
               <p className="text-muted-foreground">
                 All content on our website, including text, graphics, logos, images, and software, 
-                is the property of Creative Crafts Studio or our content suppliers and is protected 
+                is the property of M Blessings or our content suppliers and is protected 
                 by South African and international copyright laws.
               </p>
               <p className="text-muted-foreground">
@@ -244,7 +244,7 @@ export function TermsOfService() {
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-muted-foreground">
-                To the maximum extent permitted by law, Creative Crafts Studio shall not be 
+                To the maximum extent permitted by law, M Blessings shall not be 
                 liable for any indirect, incidental, special, consequential, or punitive damages, 
                 including but not limited to loss of profits, data, or use.
               </p>
@@ -294,13 +294,13 @@ export function TermsOfService() {
               </p>
               <div className="space-y-2">
                 <p className="text-muted-foreground">
-                  <strong>Email:</strong> legal@creativecrafts.co.za
+                  <strong>Email:</strong> legal@fashionstore.co.za
                 </p>
                 <p className="text-muted-foreground">
                   <strong>Phone:</strong> +27 11 123 4567
                 </p>
                 <p className="text-muted-foreground">
-                  <strong>Address:</strong> 123 Arts District, Cape Town, 8001, South Africa
+                  <strong>Address:</strong> 123 Fashion District, Cape Town, 8001, South Africa
                 </p>
               </div>
             </CardContent>

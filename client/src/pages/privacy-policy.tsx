@@ -1,12 +1,12 @@
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
-import { useTenant } from "@/hooks/use-tenant";
+import { useStoreSettings } from "@/hooks/use-store-settings";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Shield, Eye, Lock, Mail, FileText, AlertCircle } from "lucide-react";
 
 export function PrivacyPolicy() {
-  const { data: tenant, isLoading } = useTenant();
+  const { data: storeSettings, isLoading } = useStoreSettings();
 
   return (
     <div className="min-h-screen bg-background">
@@ -31,7 +31,7 @@ export function PrivacyPolicy() {
                 Privacy Policy
               </h1>
               <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
-                Your privacy is important to us. This policy explains how {tenant?.name || "Creative Crafts Studio"} 
+                Your privacy is important to us. This policy explains how {storeSettings?.name || "M Blessings"} 
                 collects, uses, and protects your personal information.
               </p>
               <p className="text-sm text-muted-foreground mt-4">
@@ -180,7 +180,7 @@ export function PrivacyPolicy() {
                 <li>Withdraw consent for data processing</li>
               </ul>
               <p className="text-muted-foreground mt-4">
-                To exercise these rights, please contact us at privacy@creativecrafts.co.za
+                To exercise these rights, please contact us at privacy@fashionstore.co.za
               </p>
             </CardContent>
           </Card>
@@ -219,13 +219,13 @@ export function PrivacyPolicy() {
               </p>
               <div className="space-y-2">
                 <p className="text-muted-foreground">
-                  <strong>Email:</strong> privacy@creativecrafts.co.za
+                  <strong>Email:</strong> privacy@fashionstore.co.za
                 </p>
                 <p className="text-muted-foreground">
                   <strong>Phone:</strong> +27 11 123 4567
                 </p>
                 <p className="text-muted-foreground">
-                  <strong>Address:</strong> 123 Arts District, Cape Town, 8001, South Africa
+                  <strong>Address:</strong> 123 Fashion District, Cape Town, 8001, South Africa
                 </p>
               </div>
             </CardContent>

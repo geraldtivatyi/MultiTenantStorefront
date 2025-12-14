@@ -1,13 +1,11 @@
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
-import { useTenant } from "@/hooks/use-tenant";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Truck, Clock, MapPin, Package, Calculator, Shield, AlertCircle } from "lucide-react";
 
 export function ShippingInfo() {
-  const { data: tenant, isLoading } = useTenant();
 
   return (
     <div className="min-h-screen bg-background">
@@ -16,26 +14,17 @@ export function ShippingInfo() {
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Hero Section */}
         <div className="text-center mb-16">
-          {isLoading ? (
-            <div className="space-y-4">
-              <Skeleton className="h-12 w-3/4 mx-auto" />
-              <Skeleton className="h-6 w-1/2 mx-auto" />
+          <div className="flex items-center justify-center mb-6">
+            <div className="w-16 h-16 bg-primary-brand/10 rounded-full flex items-center justify-center">
+              <Truck className="h-8 w-8 text-primary-brand" />
             </div>
-          ) : (
-            <>
-              <div className="flex items-center justify-center mb-6">
-                <div className="w-16 h-16 bg-primary-brand/10 rounded-full flex items-center justify-center">
-                  <Truck className="h-8 w-8 text-primary-brand" />
-                </div>
-              </div>
-              <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-6">
-                Shipping Information
-              </h1>
-              <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
-                Fast, reliable delivery across South Africa. Get your crafting supplies when you need them.
-              </p>
-            </>
-          )}
+          </div>
+          <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-6">
+            Shipping Information
+          </h1>
+          <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
+            Fast, reliable delivery across South Africa. Get your fashion items when you need them.
+          </p>
         </div>
 
         <div className="grid lg:grid-cols-2 gap-12">
@@ -86,7 +75,7 @@ export function ShippingInfo() {
                       <span>R95-R150</span>
                     </div>
                     <p className="text-sm text-muted-foreground">
-                      Priority handling for urgent orders and time-sensitive projects.
+                      Priority handling for urgent orders and special occasions.
                     </p>
                   </div>
                 </div>
@@ -107,7 +96,7 @@ export function ShippingInfo() {
                       <span>R200-R350</span>
                     </div>
                     <p className="text-sm text-muted-foreground">
-                      Emergency delivery for last-minute project needs. Order by 2 PM.
+                      Emergency delivery for last-minute fashion needs. Order by 2 PM.
                     </p>
                   </div>
                 </div>

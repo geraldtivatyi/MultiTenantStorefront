@@ -1,5 +1,5 @@
 import { 
-  tenants, 
+  storeSettings,
   users, 
   userSessions,
   userAddresses,
@@ -9,8 +9,8 @@ import {
   orders, 
   orderItems,
   paymentTransactions,
-  type Tenant, 
-  type InsertTenant,
+  type StoreSettings, 
+  type InsertStoreSettings,
   type User, 
   type InsertUser,
   type UserSession,
@@ -38,7 +38,11 @@ export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
+  getUserByVerificationToken(token: string): Promise<User | undefined>;
+  getUserByPasswordResetToken(token: string): Promise<User | undefined>;
+  getAllUsers(): Promise<User[]>;
   createUser(user: InsertUser): Promise<User>;
+  deleteUser(id: number): Promise<void>;
   updateUserLastLogin(id: number): Promise<void>;
   updateUserProfile(id: number, updates: Partial<InsertUser>): Promise<User | undefined>;
 
@@ -48,21 +52,19 @@ export interface IStorage {
   deleteUserSession(sessionId: string): Promise<void>;
   cleanupExpiredSessions(): Promise<void>;
 
-  // Tenant management
-  getTenant(id: number): Promise<Tenant | undefined>;
-  getTenantBySubdomain(subdomain: string): Promise<Tenant | undefined>;
-  createTenant(tenant: InsertTenant): Promise<Tenant>;
-  updateTenant(id: number, updates: Partial<InsertTenant>): Promise<Tenant | undefined>;
-  getAllTenants(): Promise<Tenant[]>;
+  // Store settings management
+  getStoreSettings(): Promise<StoreSettings | undefined>;
+  updateStoreSettings(updates: Partial<InsertStoreSettings>): Promise<StoreSettings | undefined>;
+  createStoreSettings(settings: InsertStoreSettings): Promise<StoreSettings>;
 
   // Product management
-  getProduct(id: number, tenantId?: number): Promise<Product | undefined>;
-  getProductsByTenant(tenantId: number): Promise<Product[]>;
+  getProduct(id: number): Promise<Product | undefined>;
+  getAllProducts(): Promise<Product[]>;
   createProduct(product: InsertProduct): Promise<Product>;
   updateProduct(id: number, product: Partial<InsertProduct>): Promise<Product | undefined>;
 
   // Cart management
-  getCartItems(sessionId: string, tenantId: number): Promise<(CartItem & { product: Product })[]>;
+  getCartItems(sessionId: string): Promise<(CartItem & { product: Product })[]>;
   addToCart(cartItem: InsertCartItem): Promise<CartItem>;
   updateCartItem(id: number, quantity: number): Promise<CartItem | undefined>;
   removeFromCart(id: number): Promise<void>;
@@ -70,10 +72,11 @@ export interface IStorage {
 
   // Order management
   getOrder(id: number): Promise<Order | undefined>;
-  getOrdersByTenant(tenantId: number): Promise<Order[]>;
-  getOrdersByUser(userId: number, tenantId: number): Promise<Order[]>;
+  getAllOrders(): Promise<Order[]>;
+  getOrdersByUser(userId: number): Promise<Order[]>;
   createOrder(order: InsertOrder): Promise<Order>;
   updateOrderStatus(id: number, status: string): Promise<Order | undefined>;
+  updateOrder(id: number, updates: Partial<InsertOrder>): Promise<Order | undefined>;
 
   // Order items
   createOrderItem(orderItem: InsertOrderItem): Promise<OrderItem>;
@@ -115,9 +118,35 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
+  async deleteUser(id: number): Promise<void> {
+    await db.delete(users).where(eq(users.id, id));
+  }
+
   async getUserByEmail(email: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.email, email));
     return user || undefined;
+  }
+
+  async getUserByVerificationToken(token: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(
+      and(
+        eq(users.emailVerificationToken, token),
+        // Token should not be expired
+        // Note: We'll check expiration in the route handler
+      )
+    );
+    return user || undefined;
+  }
+
+  async getUserByPasswordResetToken(token: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(
+      eq(users.passwordResetToken, token)
+    );
+    return user || undefined;
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    return await db.select().from(users);
   }
 
   async updateUserLastLogin(id: number): Promise<void> {
@@ -161,48 +190,37 @@ export class DatabaseStorage implements IStorage {
     await db.delete(userSessions).where(lt(userSessions.expiresAt, new Date()));
   }
 
-  // Tenant methods
-  async getTenant(id: number): Promise<Tenant | undefined> {
-    const [tenant] = await db.select().from(tenants).where(eq(tenants.id, id));
-    return tenant || undefined;
+  // Store settings methods
+  async getStoreSettings(): Promise<StoreSettings | undefined> {
+    const [settings] = await db.select().from(storeSettings).limit(1);
+    return settings || undefined;
   }
 
-  async getTenantBySubdomain(subdomain: string): Promise<Tenant | undefined> {
-    const [tenant] = await db.select().from(tenants).where(eq(tenants.subdomain, subdomain));
-    return tenant || undefined;
-  }
-
-  async createTenant(insertTenant: InsertTenant): Promise<Tenant> {
-    const [tenant] = await db.insert(tenants).values(insertTenant).returning();
-    return tenant;
-  }
-
-  async updateTenant(id: number, updates: Partial<InsertTenant>): Promise<Tenant | undefined> {
-    const [tenant] = await db
-      .update(tenants)
-      .set(updates)
-      .where(eq(tenants.id, id))
+  async updateStoreSettings(updates: Partial<InsertStoreSettings>): Promise<StoreSettings | undefined> {
+    const [settings] = await db
+      .update(storeSettings)
+      .set({ 
+        ...updates,
+        updatedAt: new Date()
+      })
       .returning();
-    return tenant;
+    return settings || undefined;
   }
 
-  async getAllTenants(): Promise<Tenant[]> {
-    return await db.select().from(tenants).orderBy(desc(tenants.createdAt));
+  async createStoreSettings(insertSettings: InsertStoreSettings): Promise<StoreSettings> {
+    const [settings] = await db.insert(storeSettings).values(insertSettings).returning();
+    return settings;
   }
 
   // Product methods
-  async getProduct(id: number, tenantId?: number): Promise<Product | undefined> {
-    const conditions = tenantId 
-      ? and(eq(products.id, id), eq(products.tenantId, tenantId))
-      : eq(products.id, id);
-    
-    const [product] = await db.select().from(products).where(conditions);
+  async getProduct(id: number): Promise<Product | undefined> {
+    const [product] = await db.select().from(products).where(eq(products.id, id));
     return product || undefined;
   }
 
-  async getProductsByTenant(tenantId: number): Promise<Product[]> {
+  async getAllProducts(): Promise<Product[]> {
     return await db.select().from(products)
-      .where(and(eq(products.tenantId, tenantId), eq(products.isActive, true)))
+      .where(eq(products.isActive, true))
       .orderBy(desc(products.createdAt));
   }
 
@@ -220,7 +238,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Cart methods
-  async getCartItems(sessionId: string, tenantId: number): Promise<(CartItem & { product: Product })[]> {
+  async getCartItems(sessionId: string): Promise<(CartItem & { product: Product })[]> {
     return await db.select({
       id: cartItems.id,
       sessionId: cartItems.sessionId,
@@ -231,10 +249,7 @@ export class DatabaseStorage implements IStorage {
     })
     .from(cartItems)
     .innerJoin(products, eq(cartItems.productId, products.id))
-    .where(and(
-      eq(cartItems.sessionId, sessionId),
-      eq(products.tenantId, tenantId)
-    ));
+    .where(eq(cartItems.sessionId, sessionId));
   }
 
   async addToCart(insertCartItem: InsertCartItem): Promise<CartItem> {
@@ -281,15 +296,14 @@ export class DatabaseStorage implements IStorage {
     return order || undefined;
   }
 
-  async getOrdersByTenant(tenantId: number): Promise<Order[]> {
+  async getAllOrders(): Promise<Order[]> {
     return await db.select().from(orders)
-      .where(eq(orders.tenantId, tenantId))
       .orderBy(desc(orders.createdAt));
   }
 
-  async getOrdersByUser(userId: number, tenantId: number): Promise<Order[]> {
+  async getOrdersByUser(userId: number): Promise<Order[]> {
     return await db.select().from(orders)
-      .where(and(eq(orders.userId, userId), eq(orders.tenantId, tenantId)))
+      .where(eq(orders.userId, userId))
       .orderBy(desc(orders.createdAt));
   }
 
@@ -306,6 +320,14 @@ export class DatabaseStorage implements IStorage {
   async updateOrderStatus(id: number, status: string): Promise<Order | undefined> {
     const [order] = await db.update(orders)
       .set({ status })
+      .where(eq(orders.id, id))
+      .returning();
+    return order || undefined;
+  }
+
+  async updateOrder(id: number, updates: Partial<InsertOrder>): Promise<Order | undefined> {
+    const [order] = await db.update(orders)
+      .set(updates)
       .where(eq(orders.id, id))
       .returning();
     return order || undefined;

@@ -16,7 +16,8 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
-import { ArrowLeft, User, MapPin, Bell, Shield, Save, Trash2, Plus } from "lucide-react";
+import { ArrowLeft, User, MapPin, Bell, Shield, Save, Trash2, Plus, Mail, CheckCircle, XCircle, Send } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Link } from "wouter";
 
 const profileSchema = z.object({
@@ -246,6 +247,26 @@ export function AccountSettings() {
     },
   });
 
+  // Resend verification email mutation
+  const resendVerificationMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("/api/auth/resend-verification", "POST", {});
+    },
+    onSuccess: () => {
+      toast({
+        title: "Verification Email Sent",
+        description: "Please check your email for the verification link.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to send verification email",
+        variant: "destructive",
+      });
+    },
+  });
+
   const onProfileSubmit = (data: ProfileFormData) => {
     profileMutation.mutate(data);
   };
@@ -359,7 +380,39 @@ export function AccountSettings() {
                       
                       <div className="space-y-2">
                         <Label>Email Address</Label>
-                        <Input type="email" value={user?.email || ""} disabled className="bg-muted" />
+                        <div className="flex items-center gap-2">
+                          <Input type="email" value={user?.email || ""} disabled className="bg-muted flex-1" />
+                          {user?.emailVerified ? (
+                            <Badge variant="default" className="bg-green-100 text-green-800">
+                              <CheckCircle className="h-3 w-3 mr-1" />
+                              Verified
+                            </Badge>
+                          ) : (
+                            <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
+                              <XCircle className="h-3 w-3 mr-1" />
+                              Unverified
+                            </Badge>
+                          )}
+                        </div>
+                        {!user?.emailVerified && (
+                          <div className="flex items-center gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                            <Mail className="h-4 w-4 text-yellow-600" />
+                            <div className="flex-1">
+                              <p className="text-sm text-yellow-800 font-medium">Email not verified</p>
+                              <p className="text-xs text-yellow-700">Please verify your email to access all features</p>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => resendVerificationMutation.mutate()}
+                              disabled={resendVerificationMutation.isPending}
+                            >
+                              <Send className="h-4 w-4 mr-1" />
+                              {resendVerificationMutation.isPending ? "Sending..." : "Resend"}
+                            </Button>
+                          </div>
+                        )}
                         <p className="text-sm text-muted-foreground">Contact support to change your email address</p>
                       </div>
                       

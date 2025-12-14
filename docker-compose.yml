@@ -1,0 +1,35 @@
+version: '3.8'
+services:
+  db:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_DB: multitenantstorefront
+      POSTGRES_USER: appuser
+      POSTGRES_PASSWORD: appsecret
+    ports:
+      - "55434:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      - db
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://appuser:appsecret@db:5432/multitenantstorefront
+      # Environment variables from .env file will be automatically loaded
+      # Make sure PUDO_BEARER_TOKEN or PUDO_API_KEY is set in your .env file
+    ports:
+      - "8081:8081"
+      # Add other ports if your app exposes more
+    working_dir: /app
+    command: ["/bin/sh", "-c", "until nc -z db 5432; do echo 'Waiting for db...'; sleep 1; done; npm run db:migrate && npm run db:push && npm run dev"]
+
+volumes:
+  pgdata:

@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { useTenant } from "@/hooks/use-tenant";
+import { useStoreSettings } from "@/hooks/use-store-settings";
 import { useCart } from "@/hooks/use-cart";
 import { useAuth } from "@/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
@@ -16,9 +16,14 @@ export function Header() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const { data: tenant } = useTenant();
+  const { data: storeSettings } = useStoreSettings();
   const { cartItemCount } = useCart();
   const { user, isAuthenticated, logout, isLoggingOut } = useAuth();
+
+  // Helper function to navigate to global routes (always absolute path)
+  const navigateToGlobalRoute = (path: string) => {
+    window.location.href = path;
+  };
 
   return (
     <>
@@ -30,122 +35,114 @@ export function Header() {
           <div className="flex items-center">
             <Link href="/" className="flex-shrink-0">
               <span className="text-xl sm:text-2xl font-bold text-primary-brand">
-                {tenant?.name || "Store"}
+                {storeSettings?.name || "M Blessings"}
               </span>
-              {tenant?.subdomain && (
-                <span className="text-xs text-gray-500 ml-2 hidden sm:inline">
-                  {tenant.subdomain}.platform.com
-                </span>
-              )}
             </Link>
           </div>
 
           {/* Desktop Navigation */}
-          <nav className="hidden md:block">
-            <div className="ml-10 flex items-baseline space-x-4">
-              <Link 
-                href="/" 
-                className="text-gray-900 hover:text-primary-brand px-3 py-2 rounded-md text-sm font-medium transition-colors"
-              >
-                Home
-              </Link>
-              <Link 
-                href="/search" 
-                className="text-gray-600 hover:text-primary-brand px-3 py-2 rounded-md text-sm font-medium transition-colors"
-              >
-                Products
-              </Link>
-              <Link 
-                href="/about" 
-                className="text-gray-600 hover:text-primary-brand px-3 py-2 rounded-md text-sm font-medium transition-colors"
-              >
-                About
-              </Link>
-              <Link 
-                href="/contact" 
-                className="text-gray-600 hover:text-primary-brand px-3 py-2 rounded-md text-sm font-medium transition-colors"
-              >
-                Contact
-              </Link>
-              {/* Vendor Dashboard - appears right after Contact for tenant owners */}
-              {user?.role === "tenant_owner" && (
+          {isAuthenticated && (
+            <nav className="hidden md:block">
+              <div className="ml-10 flex items-baseline space-x-4">
                 <Link 
-                  href="/vendor" 
-                  className="text-blue-600 hover:text-blue-800 px-3 py-2 rounded-md text-sm font-medium transition-colors border border-blue-600 bg-blue-50"
+                  href="/" 
+                  className="text-gray-900 hover:text-primary-brand px-3 py-2 rounded-md text-sm font-medium transition-colors"
                 >
-                  Vendor Dashboard
+                  Home
                 </Link>
-              )}
-              {/* Admin Panel - appears for platform administrators */}
-              {user?.role === "platform_admin" && (
                 <Link 
-                  href="/admin" 
-                  className="text-orange-600 hover:text-orange-800 px-3 py-2 rounded-md text-sm font-medium transition-colors border border-orange-600 bg-orange-50"
+                  href="/search" 
+                  className="text-gray-600 hover:text-primary-brand px-3 py-2 rounded-md text-sm font-medium transition-colors"
                 >
-                  Platform Admin
+                  Products
                 </Link>
-              )}
-            </div>
-          </nav>
+                <Link 
+                  href="/about" 
+                  className="text-gray-600 hover:text-primary-brand px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                >
+                  About
+                </Link>
+                <Link 
+                  href="/contact" 
+                  className="text-gray-600 hover:text-primary-brand px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                >
+                  Contact
+                </Link>
+                {/* Admin Panel - appears for platform administrators */}
+                {user?.role === "platform_admin" && (
+                  <button 
+                    onClick={() => navigateToGlobalRoute("/admin")}
+                    className="text-orange-600 hover:text-orange-800 px-3 py-2 rounded-md text-sm font-medium transition-colors border border-orange-600 bg-orange-50"
+                  >
+                    Platform Admin
+                  </button>
+                )}
+              </div>
+            </nav>
+          )}
 
           {/* Desktop Actions */}
           <div className="hidden md:flex items-center space-x-4">
             {/* Search Dialog */}
-            <Dialog open={isSearchOpen} onOpenChange={setIsSearchOpen}>
-              <DialogTrigger asChild>
-                <Button variant="ghost" size="icon" className="text-gray-600 hover:text-primary-brand">
-                  <Search className="h-5 w-5" />
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle>Search Products</DialogTitle>
-                  <DialogDescription>
-                    Search for arts and crafts products in our collection.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="flex items-center space-x-2">
-                  <div className="grid flex-1 gap-2">
-                    <Input
-                      placeholder="Search for products..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && searchQuery.trim()) {
+            {isAuthenticated && (
+              <Dialog open={isSearchOpen} onOpenChange={setIsSearchOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="ghost" size="icon" className="text-gray-600 hover:text-primary-brand">
+                    <Search className="h-5 w-5" />
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Search Products</DialogTitle>
+                    <DialogDescription>
+                      Search for clothing and fashion items in our collection.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="flex items-center space-x-2">
+                    <div className="grid flex-1 gap-2">
+                      <Input
+                        placeholder="Search for products..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && searchQuery.trim()) {
+                            window.location.href = `/?search=${encodeURIComponent(searchQuery)}`;
+                            setIsSearchOpen(false);
+                          }
+                        }}
+                      />
+                    </div>
+                    <Button 
+                      onClick={() => {
+                        if (searchQuery.trim()) {
                           window.location.href = `/?search=${encodeURIComponent(searchQuery)}`;
                           setIsSearchOpen(false);
                         }
                       }}
-                    />
+                      disabled={!searchQuery.trim()}
+                    >
+                      Search
+                    </Button>
                   </div>
-                  <Button 
-                    onClick={() => {
-                      if (searchQuery.trim()) {
-                        window.location.href = `/?search=${encodeURIComponent(searchQuery)}`;
-                        setIsSearchOpen(false);
-                      }
-                    }}
-                    disabled={!searchQuery.trim()}
-                  >
-                    Search
-                  </Button>
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  Try searching for: "paint", "brushes", "canvas", "polymer clay"
-                </div>
-              </DialogContent>
-            </Dialog>
+                  <div className="text-sm text-muted-foreground">
+                    Try searching for: "shirt", "dress", "jeans", "jacket"
+                  </div>
+                </DialogContent>
+              </Dialog>
+            )}
             
-            <Link href="/cart">
-              <Button variant="ghost" size="icon" className="text-gray-600 hover:text-primary-brand relative">
-                <ShoppingCart className="h-5 w-5" />
-                {cartItemCount > 0 && (
-                  <Badge className="absolute -top-2 -right-2 bg-error-brand text-white text-xs h-5 w-5 flex items-center justify-center p-0">
-                    {cartItemCount}
-                  </Badge>
-                )}
-              </Button>
-            </Link>
+            {isAuthenticated && (
+              <Link href="/cart">
+                <Button variant="ghost" size="icon" className="text-gray-600 hover:text-primary-brand relative">
+                  <ShoppingCart className="h-5 w-5" />
+                  {cartItemCount > 0 && (
+                    <Badge className="absolute -top-2 -right-2 bg-error-brand text-white text-xs h-5 w-5 flex items-center justify-center p-0">
+                      {cartItemCount}
+                    </Badge>
+                  )}
+                </Button>
+              </Link>
+            )}
             
             {/* Authentication Controls */}
             {isAuthenticated ? (
@@ -170,17 +167,19 @@ export function Header() {
                     </div>
                   </div>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem asChild>
-                    <Link href="/my-orders" className="flex items-center">
-                      <Package className="mr-2 h-4 w-4" />
-                      <span>My Orders</span>
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link href="/account-settings" className="flex items-center">
+                  {user?.role === "platform_admin" && (
+                    <DropdownMenuItem onClick={() => navigateToGlobalRoute("/admin")}>
                       <Settings className="mr-2 h-4 w-4" />
-                      <span>Account Settings</span>
-                    </Link>
+                      <span>Platform Admin</span>
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem onClick={() => navigateToGlobalRoute("/my-orders")}>
+                    <Package className="mr-2 h-4 w-4" />
+                    <span>My Orders</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigateToGlobalRoute("/account-settings")}>
+                    <Settings className="mr-2 h-4 w-4" />
+                    <span>Account Settings</span>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem 
@@ -194,18 +193,23 @@ export function Header() {
               </DropdownMenu>
             ) : (
               <div className="flex items-center space-x-2">
-                <Link href="/login">
-                  <Button variant="ghost" size="sm" className="text-gray-600 hover:text-primary-brand">
-                    <LogIn className="h-4 w-4 mr-2" />
-                    Sign In
-                  </Button>
-                </Link>
-                <Link href="/register">
-                  <Button size="sm" className="bg-primary-brand hover:bg-primary-brand/90">
-                    <UserPlus className="h-4 w-4 mr-2" />
-                    Sign Up
-                  </Button>
-                </Link>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="text-gray-600 hover:text-primary-brand"
+                  onClick={() => navigateToGlobalRoute("/login")}
+                >
+                  <LogIn className="h-4 w-4 mr-2" />
+                  Sign In
+                </Button>
+                <Button 
+                  size="sm" 
+                  className="bg-primary-brand hover:bg-primary-brand/90"
+                  onClick={() => navigateToGlobalRoute("/register")}
+                >
+                  <UserPlus className="h-4 w-4 mr-2" />
+                  Sign Up
+                </Button>
               </div>
             )}
           </div>
@@ -213,16 +217,18 @@ export function Header() {
           {/* Mobile Actions */}
           <div className="flex md:hidden items-center space-x-2">
             {/* Mobile Cart */}
-            <Link href="/cart">
-              <Button variant="ghost" size="icon" className="text-gray-600 hover:text-primary-brand relative">
-                <ShoppingCart className="h-5 w-5" />
-                {cartItemCount > 0 && (
-                  <Badge className="absolute -top-2 -right-2 bg-error-brand text-white text-xs h-5 w-5 flex items-center justify-center p-0">
-                    {cartItemCount}
-                  </Badge>
-                )}
-              </Button>
-            </Link>
+            {isAuthenticated && (
+              <Link href="/cart">
+                <Button variant="ghost" size="icon" className="text-gray-600 hover:text-primary-brand relative">
+                  <ShoppingCart className="h-5 w-5" />
+                  {cartItemCount > 0 && (
+                    <Badge className="absolute -top-2 -right-2 bg-error-brand text-white text-xs h-5 w-5 flex items-center justify-center p-0">
+                      {cartItemCount}
+                    </Badge>
+                  )}
+                </Button>
+              </Link>
+            )}
 
             {/* Mobile Menu */}
             <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
@@ -234,98 +240,93 @@ export function Header() {
               <SheetContent side="right" className="w-[300px] sm:w-[350px]">
                 <SheetHeader>
                   <SheetTitle className="text-left">
-                    {tenant?.name || "Store"} Menu
+                    {storeSettings?.name || "M Blessings"} Menu
                   </SheetTitle>
                 </SheetHeader>
                 <div className="mt-6 space-y-6">
                   {/* Mobile Search */}
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <div className="flex items-center space-x-2">
-                      <Search className="h-5 w-5 text-gray-400" />
-                      <Input
-                        placeholder="Search products..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="border-0 bg-transparent focus:ring-0 focus:border-0"
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && searchQuery.trim()) {
-                            window.location.href = `/?search=${encodeURIComponent(searchQuery)}`;
-                            setIsMobileMenuOpen(false);
-                          }
-                        }}
-                      />
-                      <Button 
-                        onClick={() => {
-                          if (searchQuery.trim()) {
-                            window.location.href = `/?search=${encodeURIComponent(searchQuery)}`;
-                            setIsMobileMenuOpen(false);
-                          }
-                        }}
-                        disabled={!searchQuery.trim()}
-                        size="sm"
-                        className="bg-primary-brand hover:bg-primary-brand/90"
-                      >
-                        Go
-                      </Button>
+                  {isAuthenticated && (
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="flex items-center space-x-2">
+                        <Search className="h-5 w-5 text-gray-400" />
+                        <Input
+                          placeholder="Search products..."
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          className="border-0 bg-transparent focus:ring-0 focus:border-0"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && searchQuery.trim()) {
+                              window.location.href = `/?search=${encodeURIComponent(searchQuery)}`;
+                              setIsMobileMenuOpen(false);
+                            }
+                          }}
+                        />
+                        <Button 
+                          onClick={() => {
+                            if (searchQuery.trim()) {
+                              window.location.href = `/?search=${encodeURIComponent(searchQuery)}`;
+                              setIsMobileMenuOpen(false);
+                            }
+                          }}
+                          disabled={!searchQuery.trim()}
+                          size="sm"
+                          className="bg-primary-brand hover:bg-primary-brand/90"
+                        >
+                          Go
+                        </Button>
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   {/* Navigation Links */}
-                  <div className="space-y-3">
-                    <Link 
-                      href="/" 
-                      className="flex items-center space-x-3 p-3 text-gray-900 hover:text-primary-brand hover:bg-gray-50 rounded-lg transition-colors"
-                      onClick={() => setIsMobileMenuOpen(false)}
-                    >
-                      <span className="text-lg font-medium">Home</span>
-                    </Link>
-                    <Link 
-                      href="/search" 
-                      className="flex items-center space-x-3 p-3 text-gray-600 hover:text-primary-brand hover:bg-gray-50 rounded-lg transition-colors"
-                      onClick={() => setIsMobileMenuOpen(false)}
-                    >
-                      <span className="text-lg font-medium">Products</span>
-                    </Link>
-                    <Link 
-                      href="/about" 
-                      className="flex items-center space-x-3 p-3 text-gray-600 hover:text-primary-brand hover:bg-gray-50 rounded-lg transition-colors"
-                      onClick={() => setIsMobileMenuOpen(false)}
-                    >
-                      <span className="text-lg font-medium">About</span>
-                    </Link>
-                    <Link 
-                      href="/contact" 
-                      className="flex items-center space-x-3 p-3 text-gray-600 hover:text-primary-brand hover:bg-gray-50 rounded-lg transition-colors"
-                      onClick={() => setIsMobileMenuOpen(false)}
-                    >
-                      <span className="text-lg font-medium">Contact</span>
-                    </Link>
-                    
-                    {/* Vendor Dashboard - appears right after Contact for tenant owners */}
-                    {user?.role === "tenant_owner" && (
+                  {isAuthenticated && (
+                    <div className="space-y-3">
                       <Link 
-                        href="/vendor" 
-                        className="flex items-center space-x-3 p-3 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors border-l-4 border-blue-600"
+                        href="/" 
+                        className="flex items-center space-x-3 p-3 text-gray-900 hover:text-primary-brand hover:bg-gray-50 rounded-lg transition-colors"
                         onClick={() => setIsMobileMenuOpen(false)}
                       >
-                        <span className="text-lg font-medium">Vendor Dashboard</span>
+                        <span className="text-lg font-medium">Home</span>
                       </Link>
-                    )}
-                    
-                    {/* Platform Admin - appears for platform administrators */}
-                    {user?.role === "platform_admin" && (
                       <Link 
-                        href="/admin" 
-                        className="flex items-center space-x-3 p-3 text-orange-600 hover:text-orange-800 hover:bg-orange-50 rounded-lg transition-colors border-l-4 border-orange-600"
+                        href="/search" 
+                        className="flex items-center space-x-3 p-3 text-gray-600 hover:text-primary-brand hover:bg-gray-50 rounded-lg transition-colors"
                         onClick={() => setIsMobileMenuOpen(false)}
                       >
-                        <span className="text-lg font-medium">Platform Admin</span>
+                        <span className="text-lg font-medium">Products</span>
                       </Link>
-                    )}
-                  </div>
+                      <Link 
+                        href="/about" 
+                        className="flex items-center space-x-3 p-3 text-gray-600 hover:text-primary-brand hover:bg-gray-50 rounded-lg transition-colors"
+                        onClick={() => setIsMobileMenuOpen(false)}
+                      >
+                        <span className="text-lg font-medium">About</span>
+                      </Link>
+                      <Link 
+                        href="/contact" 
+                        className="flex items-center space-x-3 p-3 text-gray-600 hover:text-primary-brand hover:bg-gray-50 rounded-lg transition-colors"
+                        onClick={() => setIsMobileMenuOpen(false)}
+                      >
+                        <span className="text-lg font-medium">Contact</span>
+                      </Link>
+                      
+                      {/* Platform Admin - appears for platform administrators */}
+                      {user?.role === "platform_admin" && (
+                        <button 
+                          onClick={() => {
+                            setIsMobileMenuOpen(false);
+                            navigateToGlobalRoute("/admin");
+                          }}
+                          className="flex items-center space-x-3 p-3 text-orange-600 hover:text-orange-800 hover:bg-orange-50 rounded-lg transition-colors border-l-4 border-orange-600 w-full text-left"
+                        >
+                          <span className="text-lg font-medium">Platform Admin</span>
+                        </button>
+                      )}
+                    </div>
+                  )}
 
                   {/* Divider */}
-                  <div className="border-t border-gray-200"></div>
+                  {isAuthenticated && <div className="border-t border-gray-200"></div>}
 
                   {/* User Section */}
                   {isAuthenticated ? (
@@ -346,22 +347,38 @@ export function Header() {
                       </div>
                       
                       <div className="space-y-2">
-                        <Link 
-                          href="/my-orders" 
-                          className="flex items-center space-x-3 p-3 text-gray-600 hover:text-primary-brand hover:bg-gray-50 rounded-lg transition-colors"
-                          onClick={() => setIsMobileMenuOpen(false)}
+                        {user?.role === "platform_admin" && (
+                          <button 
+                            onClick={() => {
+                              setIsMobileMenuOpen(false);
+                              navigateToGlobalRoute("/admin");
+                            }}
+                            className="flex items-center space-x-3 p-3 text-orange-600 hover:text-orange-800 hover:bg-orange-50 rounded-lg transition-colors w-full text-left"
+                          >
+                            <Settings className="h-5 w-5" />
+                            <span>Platform Admin</span>
+                          </button>
+                        )}
+                        <button 
+                          onClick={() => {
+                            setIsMobileMenuOpen(false);
+                            navigateToGlobalRoute("/my-orders");
+                          }}
+                          className="flex items-center space-x-3 p-3 text-gray-600 hover:text-primary-brand hover:bg-gray-50 rounded-lg transition-colors w-full text-left"
                         >
                           <Package className="h-5 w-5" />
                           <span>My Orders</span>
-                        </Link>
-                        <Link 
-                          href="/account-settings" 
-                          className="flex items-center space-x-3 p-3 text-gray-600 hover:text-primary-brand hover:bg-gray-50 rounded-lg transition-colors"
-                          onClick={() => setIsMobileMenuOpen(false)}
+                        </button>
+                        <button 
+                          onClick={() => {
+                            setIsMobileMenuOpen(false);
+                            navigateToGlobalRoute("/account-settings");
+                          }}
+                          className="flex items-center space-x-3 p-3 text-gray-600 hover:text-primary-brand hover:bg-gray-50 rounded-lg transition-colors w-full text-left"
                         >
                           <Settings className="h-5 w-5" />
                           <span>Account Settings</span>
-                        </Link>
+                        </button>
                         <button
                           onClick={() => {
                             logout();
@@ -377,24 +394,27 @@ export function Header() {
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      <Link 
-                        href="/login"
-                        onClick={() => setIsMobileMenuOpen(false)}
+                      <Button 
+                        variant="outline" 
+                        className="w-full justify-start"
+                        onClick={() => {
+                          setIsMobileMenuOpen(false);
+                          navigateToGlobalRoute("/login");
+                        }}
                       >
-                        <Button variant="outline" className="w-full justify-start">
-                          <LogIn className="h-4 w-4 mr-2" />
-                          Sign In
-                        </Button>
-                      </Link>
-                      <Link 
-                        href="/register"
-                        onClick={() => setIsMobileMenuOpen(false)}
+                        <LogIn className="h-4 w-4 mr-2" />
+                        Sign In
+                      </Button>
+                      <Button 
+                        className="w-full justify-start bg-primary-brand hover:bg-primary-brand/90"
+                        onClick={() => {
+                          setIsMobileMenuOpen(false);
+                          navigateToGlobalRoute("/register");
+                        }}
                       >
-                        <Button className="w-full justify-start bg-primary-brand hover:bg-primary-brand/90">
-                          <UserPlus className="h-4 w-4 mr-2" />
-                          Sign Up
-                        </Button>
-                      </Link>
+                        <UserPlus className="h-4 w-4 mr-2" />
+                        Sign Up
+                      </Button>
                     </div>
                   )}
                 </div>

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
-import { useTenant } from "@/hooks/use-tenant";
+import { useStoreSettings } from "@/hooks/use-store-settings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -11,7 +11,7 @@ import { Mail, Phone, MapPin, Clock, Send } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export function Contact() {
-  const { data: tenant, isLoading } = useTenant();
+  const { data: storeSettings, isLoading } = useStoreSettings();
   const { toast } = useToast();
   const [formData, setFormData] = useState({
     name: "",
@@ -20,6 +20,24 @@ export function Contact() {
     message: ""
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Get store contact info with fallbacks
+  const contactEmail = storeSettings?.contactEmail || "hello@example.com";
+  const contactPhone = storeSettings?.contactPhone || "+27 11 123 4567";
+  const contactAddress = storeSettings?.contactAddress || storeSettings?.address || "123 Main Street\nCity, 0000\nSouth Africa";
+  
+  // Default store hours
+  const defaultStoreHours = {
+    monday: "9:00 AM - 6:00 PM",
+    tuesday: "9:00 AM - 6:00 PM",
+    wednesday: "9:00 AM - 6:00 PM",
+    thursday: "9:00 AM - 6:00 PM",
+    friday: "9:00 AM - 6:00 PM",
+    saturday: "10:00 AM - 4:00 PM",
+    sunday: "Closed"
+  };
+  
+  const storeHours = storeSettings?.storeHours || defaultStoreHours;
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -95,7 +113,7 @@ export function Contact() {
           ) : (
             <>
               <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-6">
-                Contact {tenant?.name || "Us"}
+                Contact {storeSettings?.name || "Us"}
               </h1>
               <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
                 Have a question about our products? Need help with your order? 
@@ -201,7 +219,7 @@ export function Contact() {
                   </div>
                   <div>
                     <h3 className="font-medium text-foreground">Email</h3>
-                    <p className="text-muted-foreground">hello@creativecrafts.co.za</p>
+                    <p className="text-muted-foreground">{contactEmail}</p>
                     <p className="text-sm text-muted-foreground">We'll respond within 24 hours</p>
                   </div>
                 </div>
@@ -212,7 +230,7 @@ export function Contact() {
                   </div>
                   <div>
                     <h3 className="font-medium text-foreground">Phone</h3>
-                    <p className="text-muted-foreground">+27 11 123 4567</p>
+                    <p className="text-muted-foreground">{contactPhone}</p>
                     <p className="text-sm text-muted-foreground">Mon-Fri 9AM-5PM SAST</p>
                   </div>
                 </div>
@@ -223,10 +241,8 @@ export function Contact() {
                   </div>
                   <div>
                     <h3 className="font-medium text-foreground">Address</h3>
-                    <p className="text-muted-foreground">
-                      123 Arts District<br />
-                      Cape Town, 8001<br />
-                      South Africa
+                    <p className="text-muted-foreground whitespace-pre-line">
+                      {contactAddress}
                     </p>
                   </div>
                 </div>
@@ -242,18 +258,48 @@ export function Contact() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Monday - Friday</span>
-                    <span className="font-medium">9:00 AM - 6:00 PM</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Saturday</span>
-                    <span className="font-medium">10:00 AM - 4:00 PM</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Sunday</span>
-                    <span className="font-medium">Closed</span>
-                  </div>
+                  {storeHours.monday && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Monday</span>
+                      <span className="font-medium">{storeHours.monday}</span>
+                    </div>
+                  )}
+                  {storeHours.tuesday && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Tuesday</span>
+                      <span className="font-medium">{storeHours.tuesday}</span>
+                    </div>
+                  )}
+                  {storeHours.wednesday && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Wednesday</span>
+                      <span className="font-medium">{storeHours.wednesday}</span>
+                    </div>
+                  )}
+                  {storeHours.thursday && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Thursday</span>
+                      <span className="font-medium">{storeHours.thursday}</span>
+                    </div>
+                  )}
+                  {storeHours.friday && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Friday</span>
+                      <span className="font-medium">{storeHours.friday}</span>
+                    </div>
+                  )}
+                  {storeHours.saturday && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Saturday</span>
+                      <span className="font-medium">{storeHours.saturday}</span>
+                    </div>
+                  )}
+                  {storeHours.sunday && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Sunday</span>
+                      <span className="font-medium">{storeHours.sunday}</span>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -280,7 +326,7 @@ export function Contact() {
                   <div>
                     <h4 className="font-medium text-foreground">Product Questions?</h4>
                     <p className="text-sm text-muted-foreground">
-                      Our craft experts are here to help you choose the right materials.
+                      Our fashion experts are here to help you find the perfect style.
                     </p>
                   </div>
                 </div>

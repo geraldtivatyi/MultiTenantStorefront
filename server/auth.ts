@@ -82,6 +82,16 @@ export class AuthService {
       console.error('Session cleanup error:', error);
     }
   }
+
+  // Generate verification token
+  static generateVerificationToken(): string {
+    return crypto.randomBytes(32).toString('hex');
+  }
+
+  // Generate password reset token
+  static generatePasswordResetToken(): string {
+    return crypto.randomBytes(32).toString('hex');
+  }
 }
 
 // Authentication middleware
@@ -172,17 +182,6 @@ export function requirePlatformAdmin(req: AuthenticatedRequest, res: Response, n
   next();
 }
 
-export function requireTenantOwner(req: AuthenticatedRequest, res: Response, next: NextFunction) {
-  if (!req.user) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-  
-  if (req.user.role !== 'tenant_owner' && req.user.role !== 'platform_admin') {
-    return res.status(403).json({ error: 'Tenant owner access required' });
-  }
-  
-  next();
-}
 
 // Validation schemas for auth
 export const loginSchema = {

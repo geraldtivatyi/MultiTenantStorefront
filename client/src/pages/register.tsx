@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { useTenant } from "@/hooks/use-tenant";
+import { useStoreSettings } from "@/hooks/use-store-settings";
 import { UserPlus, User, Mail, Lock, AlertCircle, Phone, IdCard } from "lucide-react";
 import { AuthLoadingScreen } from "@/components/skeletons";
 
@@ -32,7 +32,8 @@ type RegisterFormData = z.infer<typeof registerSchema>;
 export function Register() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const { data: tenant } = useTenant();
+  const { data: storeSettings } = useStoreSettings();
+  const queryClient = useQueryClient();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
@@ -65,7 +66,7 @@ export function Register() {
     onSuccess: (data) => {
       console.log('Registration successful:', data);
       toast({
-        title: "Welcome to " + (tenant?.name || "our store") + "!",
+        title: "Welcome!",
         description: "Your account has been created successfully.",
       });
       // Redirect to home page
@@ -81,6 +82,8 @@ export function Register() {
         message = "An account with this email already exists. Please try logging in instead.";
       } else if (error.message.includes("USERNAME_TAKEN")) {
         message = "This username is already taken. Please choose a different one.";
+      } else if (error.message.includes("SUBDOMAIN_TAKEN")) {
+        message = "This store URL is already taken. Please choose a different one.";
       }
       
       toast({
@@ -103,7 +106,7 @@ export function Register() {
         <div className="text-center mb-8">
           <Link href="/" className="inline-block">
             <h1 className="text-3xl font-bold text-primary-brand mb-2">
-              {tenant?.name || "Creative Crafts Studio"}
+              {storeSettings?.name || "M Blessings"}
             </h1>
           </Link>
           <p className="text-muted-foreground">
@@ -230,7 +233,7 @@ export function Register() {
                     </FormItem>
                   )}
                 />
-                
+
                 <FormField
                   control={form.control}
                   name="password"
